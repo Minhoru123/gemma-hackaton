@@ -32,7 +32,11 @@ def embed(text: str) -> list[float]:
 
 
 def generate(prompt: str, system: str = "") -> str:
-    payload = {"model": config.GEN_MODEL, "prompt": prompt, "stream": False}
+    # think=False disables the E2B reasoning model's chain-of-thought so it returns
+    # only the final answer (faster, and no scaffold to strip). strip_scaffold stays
+    # as a fallback in case a model build ignores the flag.
+    payload = {"model": config.GEN_MODEL, "prompt": prompt,
+               "stream": False, "think": False}
     if system:
         payload["system"] = system
     d = _post("/api/generate", payload)
