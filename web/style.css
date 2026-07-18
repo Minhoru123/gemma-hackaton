@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #1a1a2e; background: #f4f5fb; }
+header { display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px; background: #2b2d6e; color: #fff; }
+header h1 { font-size: 1.1rem; margin: 0; }
+.controls { display: flex; gap: 10px; align-items: center; }
+.net { font-size: .8rem; padding: 3px 8px; border-radius: 10px; background: #4a4d99; }
+.net.off { background: #2e7d32; }
+main { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+.col { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+.chatcol { flex: 1.3; }
+.card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.hidden { display: none; }
+.drop { background: #fff; border: 2px dashed #b0b3d6; border-radius: 12px;
+  padding: 28px; text-align: center; color: #555; cursor: pointer; }
+.facts-row { display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px solid #eee; font-size: .92rem; gap: 12px; }
+.facts-row span { text-align: right; }
+.risk { background: #fdecea; color: #a12; border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: .9rem; }
+.chat { background: #fff; border-radius: 12px; padding: 16px; min-height: 320px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow-y: auto; max-height: 60vh; }
+.msg { margin: 10px 0; }
+.msg.you { text-align: right; }
+.bubble { display: inline-block; padding: 8px 12px; border-radius: 12px; max-width: 85%; text-align: left; }
+.you .bubble { background: #2b2d6e; color: #fff; }
+.bot .bubble { background: #eef0fb; }
+.cite { color: #2b2d6e; cursor: pointer; text-decoration: underline; font-weight: 600; }
+.snippet { background: #fffbe6; border-left: 3px solid #d4b106; padding: 8px;
+  margin: 6px 0; font-size: .85rem; }
+#askform { display: flex; gap: 8px; margin-top: 10px; }
+#q { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+button { padding: 10px 16px; background: #2b2d6e; color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; }
+button:hover { background: #3a3d8a; }
+footer { text-align: center; padding: 12px; color: #777; font-size: .82rem; }
+.tl-item { display: flex; gap: 8px; padding: 5px 0; font-size: .9rem; }
+.tl-when { color: #2b2d6e; font-weight: 600; min-width: 96px; }
+h3 { margin: 0 0 10px; font-size: 1rem; }

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Case Companion</title>
+  <link rel="stylesheet" href="/web/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Case Companion</h1>
+    <div class="controls">
+      <select id="lang"><option>English</option><option>Spanish</option></select>
+      <span id="net" class="net">checking…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="col">
+      <div id="drop" class="drop">Drop a PDF or text file, or click to choose</div>
+      <input id="file" type="file" accept=".pdf,.txt,.md" hidden />
+      <div id="facts" class="card hidden"></div>
+      <div id="timeline" class="card"></div>
+    </section>
+
+    <section class="col chatcol">
+      <div id="chat" class="chat"></div>
+      <form id="askform">
+        <input id="q" placeholder="Ask a question about your case…" autocomplete="off" />
+        <button>Ask</button>
+      </form>
+    </section>
+  </main>
+
+  <footer>This is general information, not legal advice.</footer>
+  <script src="/web/app.js"></script>
+</body>
+</html>
