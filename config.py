@@ -1,10 +1,10 @@
 OLLAMA_URL = "http://localhost:11434"
 
 # --- Generation model -------------------------------------------------------
-# To use the bigger, higher-quality model on a faster machine, comment out the
-# E2B line and uncomment the gemma4 line below. See README ("Switching models").
-GEN_MODEL = "hf.co/unsloth/gemma-4-E2B-it-GGUF:latest"  # fast, default (needs think=False)
-# GEN_MODEL = "gemma4:latest"                           # slower, better answers
+# To use the smaller, faster E2B model, comment out the gemma4 line and
+# uncomment the E2B line below. See README ("Switching models").
+# GEN_MODEL = "hf.co/unsloth/gemma-4-E2B-it-GGUF:latest"  # fast (needs think=False)
+GEN_MODEL = "gemma4:latest"  # E2B GGUF not installed locally; using the full model that is present
 # ----------------------------------------------------------------------------
 
 EMBED_MODEL = "nomic-embed-text"
