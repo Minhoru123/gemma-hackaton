@@ -81,6 +81,15 @@ def resolve(qid: int) -> None:
     c.close()
 
 
+def remove_case(case_id: int) -> None:
+    """Delete every question of one case (used when the case is deleted). Takes
+    an explicit case_id since the case may not be active."""
+    c = _conn()
+    c.execute("DELETE FROM questions WHERE case_id=?", (case_id,))
+    c.commit()
+    c.close()
+
+
 def remove_by_source(source: str) -> int:
     """Remove questions the system generated from one uploaded document in the
     active case. User-added questions (source='user') are kept."""

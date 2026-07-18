@@ -75,6 +75,9 @@ const STR = {
     newCasePrompt: "Name this case (e.g. \"Rivera divorce\"):",
     renameCase: "✎", renameCaseTitle: "Rename this case",
     renameCasePrompt: "Rename this case:",
+    deleteCase: "🗑", deleteCaseTitle: "Delete this case",
+    deleteCasePrompt: (n) =>
+      `Delete "${n}"? Its documents, timeline, questions and deadlines will be permanently removed.`,
     removeDoc: "Remove", removeDocConfirm: (n) =>
       `Remove "${n}" from this case? Its passages, timeline events and flagged questions will be deleted.`,
     explainDoc: "Explain", explainDocTitle: "Explain this document in plain language",
@@ -168,6 +171,9 @@ const STR = {
     newCasePrompt: "Nombre de este caso (p. ej. \"Divorcio Rivera\"):",
     renameCase: "✎", renameCaseTitle: "Cambiar el nombre de este caso",
     renameCasePrompt: "Cambiar el nombre de este caso:",
+    deleteCase: "🗑", deleteCaseTitle: "Eliminar este caso",
+    deleteCasePrompt: (n) =>
+      `¿Eliminar "${n}"? Sus documentos, cronología, preguntas y plazos se eliminarán de forma permanente.`,
     removeDoc: "Quitar", removeDocConfirm: (n) =>
       `¿Quitar "${n}" de este caso? Se eliminarán sus pasajes, eventos de cronología y preguntas señaladas.`,
     explainDoc: "Explicar", explainDocTitle: "Explicar este documento en lenguaje sencillo",
@@ -832,6 +838,10 @@ function renderCases() {
   $("#case-new").textContent = t("newCase");
   $("#case-rename").textContent = t("renameCase");
   $("#case-rename").title = t("renameCaseTitle");
+  $("#case-delete").textContent = t("deleteCase");
+  $("#case-delete").title = t("deleteCaseTitle");
+  // No case to fall back to: hide delete when this is the only case.
+  $("#case-delete").classList.toggle("hidden", state.cases.length <= 1);
   const sel = $("#case-select");
   sel.innerHTML = state.cases
     .map((c) => `<option value="${c.id}"${c.id === state.activeCase ? " selected" : ""}>${esc(c.name)}</option>`)
@@ -872,6 +882,19 @@ $("#case-rename").onclick = async () => {
   state.cases = data.cases;
   state.activeCase = data.active_id;
   renderCases();
+};
+$("#case-delete").onclick = async () => {
+  if (!confirm(t("deleteCasePrompt")(activeCaseName()))) return;
+  const data = await post("/api/cases/delete", { id: state.activeCase });
+  state.cases = data.cases;
+  state.activeCase = data.active_id;
+  state.reveal = null;
+  state.msgs = [];
+  state.adviceResult = null;
+  state.resolvedLocal = new Set();
+  state.view = "";   // re-derive from the newly active case's role
+  renderCases();
+  await refresh();
 };
 $("#case-new").onclick = async () => {
   const name = prompt(t("newCasePrompt"));

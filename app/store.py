@@ -125,6 +125,16 @@ def remove_source(source: str) -> int:
     return n
 
 
+def remove_case(case_id: int) -> None:
+    """Delete all upload chunks belonging to one case (used when the case itself
+    is deleted). Takes an explicit case_id since the case may not be active.
+    Shared reference chunks (case_id IS NULL) are never touched."""
+    c = _conn()
+    c.execute("DELETE FROM chunks WHERE kind='upload' AND case_id=?", (case_id,))
+    c.commit()
+    c.close()
+
+
 def clear_uploads() -> None:
     """Remove all upload chunks for the active case (reference data untouched)."""
     case_id = cases.active_id()

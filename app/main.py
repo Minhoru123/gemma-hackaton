@@ -58,6 +58,10 @@ class CaseRenameBody(BaseModel):
     name: str
 
 
+class CaseDeleteBody(BaseModel):
+    id: int
+
+
 class DocRemoveBody(BaseModel):
     source: str
 
@@ -187,6 +191,24 @@ async def switch_case(body: CaseSwitchBody):
 @app.post("/api/cases/rename")
 async def rename_case(body: CaseRenameBody):
     cases.rename(body.id, body.name)  # no-op on blank name / unknown id
+    return _cases_state()
+
+
+@app.post("/api/cases/delete")
+async def delete_case(body: CaseDeleteBody):
+    """Delete a case and all its scoped data. Scoped rows (uploads, timeline,
+    questions, obligations) are cleared first (while still identifiable), then
+    the case row. Blocked for the last remaining case or an unknown id (in which
+    case nothing is deleted). Shared corpus chunks (case_id IS NULL) are never
+    touched."""
+    ids = {c["id"] for c in cases.list_all()}
+    if body.id not in ids or len(ids) <= 1:
+        return _cases_state()  # last-case guard / unknown id: no-op
+    store.remove_case(body.id)
+    timeline.remove_case(body.id)
+    questions.remove_case(body.id)
+    obligations.remove_case(body.id)
+    cases.delete(body.id)  # removes the case row + reactivates if needed
     return _cases_state()
 
 

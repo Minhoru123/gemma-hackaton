@@ -95,6 +95,36 @@ def rename(case_id: int, name: str) -> None:
     c.close()
 
 
+def delete(case_id: int) -> bool:
+    """Delete a case's row. No-op returning False if it's the last case (the app
+    must always have one) or the id doesn't exist. If the deleted case was
+    active, activate the most recent remaining case so we're never left without
+    an active case. Returns True if a case was removed.
+
+    This deletes only the `cases` row; the per-case stores own the deletion of
+    their own scoped rows (no import cycle)."""
+    c = _conn()
+    n = c.execute("SELECT COUNT(*) FROM cases").fetchone()[0]
+    if n <= 1:
+        c.close()
+        return False
+    row = c.execute("SELECT is_active FROM cases WHERE id=?", (case_id,)).fetchone()
+    if row is None:
+        c.close()
+        return False
+    was_active = bool(row[0])
+    c.execute("DELETE FROM cases WHERE id=?", (case_id,))
+    c.commit()
+    c.close()
+    if was_active:
+        recent = _conn()
+        r = recent.execute("SELECT id FROM cases ORDER BY id DESC LIMIT 1").fetchone()
+        recent.close()
+        if r:
+            set_active(r[0])
+    return True
+
+
 def set_active(case_id: int) -> None:
     """Make exactly one case active. Switching to a non-existent id is a no-op
     (leaves current state unchanged) rather than clearing all active flags."""

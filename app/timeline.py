@@ -82,6 +82,15 @@ def list_events() -> list[dict]:
     return [{"kind": k, "label": l, "when": w} for (k, l, w) in rows]
 
 
+def remove_case(case_id: int) -> None:
+    """Delete every timeline event of one case (used when the case is deleted).
+    Takes an explicit case_id since the case may not be active."""
+    c = _conn()
+    c.execute("DELETE FROM timeline WHERE case_id=?", (case_id,))
+    c.commit()
+    c.close()
+
+
 def remove_by_source(source: str) -> int:
     """Remove all timeline events tied to one uploaded document in the active
     case. Matches on the recorded `source` column, falling back to a label match

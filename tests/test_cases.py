@@ -98,6 +98,72 @@ def test_remove_source_deletes_doc_chunks_timeline_and_questions(tmp_path):
     assert "Flagged from drop" not in qs                 # its flag removed
 
 
+def test_delete_removes_case_and_its_scoped_data(tmp_path):
+    _fresh(tmp_path)
+    a = cases.active_id()
+    b = cases.create("Case B")  # b is now active
+    store.add_chunks("docB.txt", ["Content scoped to case B."], kind="upload")
+    timeline.add_event("filed", "Filed: docB.txt (notice)", "2026-08-03")
+    questions.add("Ask about docB", source="docB.txt")
+    obligations.add("Respond in B", due_date="2026-08-03")
+
+    # Delete B: clear its scoped rows, then the case row (as the endpoint does).
+    store.remove_case(b)
+    timeline.remove_case(b)
+    questions.remove_case(b)
+    obligations.remove_case(b)
+    assert cases.delete(b) is True
+
+    ids = [c["id"] for c in cases.list_all()]
+    assert b not in ids and a in ids
+    # Its scoped data is gone; A becomes active and sees nothing from B.
+    assert cases.active_id() == a
+    assert store.list_sources() == []
+    assert timeline.list_events() == []
+    assert questions.list_open() == []
+    assert obligations.warnings() == []
+
+
+def test_delete_active_case_reactivates_another(tmp_path):
+    _fresh(tmp_path)
+    a = cases.active_id()
+    b = cases.create("Case B")  # b active
+    assert cases.active_id() == b
+    assert cases.delete(b) is True
+    actives = [c for c in cases.list_all() if c["is_active"]]
+    assert len(actives) == 1 and actives[0]["id"] == a
+
+
+def test_delete_last_case_is_noop(tmp_path):
+    _fresh(tmp_path)
+    a = cases.active_id()
+    assert cases.delete(a) is False
+    assert [c["id"] for c in cases.list_all()] == [a]
+
+
+def test_delete_nonexistent_id_is_noop(tmp_path):
+    _fresh(tmp_path)
+    a = cases.active_id()
+    cases.create("Case B")
+    before = [c["id"] for c in cases.list_all()]
+    assert cases.delete(9999) is False
+    assert [c["id"] for c in cases.list_all()] == before
+
+
+def test_delete_case_keeps_shared_corpus_chunks(tmp_path):
+    _fresh(tmp_path)
+    b = cases.create("Case B")
+    store.add_chunks("rights.md", ["You have twenty days to respond after service."], kind="corpus")
+    store.add_chunks("docB.txt", ["Upload scoped to B."], kind="upload")
+
+    store.remove_case(b)
+    assert cases.delete(b) is True
+
+    # Shared corpus survives; it's still retrievable from the remaining case.
+    hits = store.search("how long to respond")
+    assert any(h["source"] == "rights.md" for h in hits)
+
+
 def test_corpus_chunks_are_shared_across_cases(tmp_path):
     _fresh(tmp_path)
     # Corpus (reference) chunks are not tied to a case.

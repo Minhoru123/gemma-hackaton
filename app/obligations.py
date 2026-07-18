@@ -111,6 +111,15 @@ def satisfy(oid: int) -> None:
     c.close()
 
 
+def remove_case(case_id: int) -> None:
+    """Delete every obligation of one case (used when the case is deleted). Takes
+    an explicit case_id since the case may not be active."""
+    c = _conn()
+    c.execute("DELETE FROM obligations WHERE case_id=?", (case_id,))
+    c.commit()
+    c.close()
+
+
 def try_satisfy(doc_type: str, filed_by: str = "") -> list[str]:
     """When a document of this type is uploaded, mark open obligations in the
     active case waiting on that type as satisfied. When the filer's side is
