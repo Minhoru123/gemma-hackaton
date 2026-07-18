@@ -25,10 +25,16 @@ def load_rules() -> list[dict]:
 
 
 def apply(doc_type: str, filed_date: str, source_name: str,
-          jurisdiction: str = "") -> list[dict]:
+          jurisdiction: str = "", origin: str = "") -> list[dict]:
     """Create presumptive obligations triggered by this filing. filed_date is
     ISO (YYYY-MM-DD); falls back to today if missing. Only rules matching the
-    case's jurisdiction fire (see module docstring). Returns created items."""
+    case's jurisdiction fire (see module docstring). origin is who filed the
+    trigger relative to the user ('user' | 'opponent' | '' unknown): the user's
+    own filing creates the OTHER side's duty to respond, not the user's, so
+    origin='user' fires nothing. Unknown origin fires — a spurious to-do beats
+    a silently missed deadline. Returns created items."""
+    if origin == "user":
+        return []
     # Semantic guard: a malformed or impossible date must never reach the
     # calendar arithmetic below (timedelta handles month/year rollover).
     filed_date = dates.valid_iso(filed_date) or datetime.date.today().isoformat()

@@ -79,6 +79,14 @@ const STR = {
       `Remove "${n}" from this case? Its passages, timeline events and flagged questions will be deleted.`,
     explainDoc: "Explain", explainDocTitle: "Explain this document in plain language",
     explainQ: (n) => `Explain ${n} to me`,
+    roleQ: "Which side of this case are you?",
+    rolePlaintiff: "I'm the Plaintiff / Petitioner",
+    roleDefendant: "I'm the Defendant / Respondent",
+    rolePlaintiffLabel: "Plaintiff / Petitioner",
+    roleDefendantLabel: "Defendant / Respondent",
+    roleYou: (l) => `You: ${l}`,
+    roleChangeTitle: "Click to change",
+    uploadProgress: (i, n) => `Reading file ${i} of ${n}…`,
   },
   es: {
     badge: "Privado — nada sale de este equipo",
@@ -156,6 +164,14 @@ const STR = {
       `¿Quitar "${n}" de este caso? Se eliminarán sus pasajes, eventos de cronología y preguntas señaladas.`,
     explainDoc: "Explicar", explainDocTitle: "Explicar este documento en lenguaje sencillo",
     explainQ: (n) => `Explícame ${n}`,
+    roleQ: "¿En qué lado de este caso está usted?",
+    rolePlaintiff: "Soy la parte Demandante / Peticionaria",
+    roleDefendant: "Soy la parte Demandada / Requerida",
+    rolePlaintiffLabel: "Demandante / Peticionario(a)",
+    roleDefendantLabel: "Demandado(a) / Requerido(a)",
+    roleYou: (l) => `Usted: ${l}`,
+    roleChangeTitle: "Haga clic para cambiar",
+    uploadProgress: (i, n) => `Leyendo archivo ${i} de ${n}…`,
   },
 };
 
@@ -167,6 +183,7 @@ const state = {
   msgs: [],                 // {kind:'user'|'answer'|'idk'|'error', text, cits, q}
   reveal: null,             // last upload analysis
   jurisdiction: "",         // 'utah' | 'federal' | '' (unknown)
+  role: "",                 // 'plaintiff' | 'defendant' | '' (not asked yet)
   events: [], warnings: [], questions: [], docs: [],
   cases: [], activeCase: null,
   resolvedLocal: new Set(), // question ids checked this session
@@ -244,21 +261,36 @@ function setUploading(on) {
   }
 }
 
-async function uploadFile(file) {
-  if (!file || state.uploading) return;
+function setBusyLabel(text) {
+  document.querySelectorAll(".drop-busy-label").forEach((el) => {
+    el.textContent = text;
+  });
+}
+
+async function uploadFiles(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if (!list.length || state.uploading) return;
   setUploading(true);
   try {
-    const fd = new FormData();
-    fd.append("file", file);
-    const data = await api("/api/upload", { method: "POST", body: fd });
-    state.reveal = { file: file.name, ...data };
-    state.docMeta[file.name] = { type: data.doc_type, filed: data.filed_date };
+    // Sequential on purpose: each upload runs local model analysis; the
+    // timeline orders documents by their own signed/filed dates regardless
+    // of upload order.
+    for (let i = 0; i < list.length; i++) {
+      setBusyLabel(list.length > 1
+        ? t("uploadProgress")(i + 1, list.length) : t("uploadingLabel"));
+      const fd = new FormData();
+      fd.append("file", list[i]);
+      const data = await api("/api/upload", { method: "POST", body: fd });
+      state.reveal = { file: list[i].name, ...data };
+      state.docMeta[list[i].name] = { type: data.doc_type, filed: data.filed_date };
+    }
     localStorage.setItem("cc_docmeta", JSON.stringify(state.docMeta));
     await refresh();
   } catch (e) {
     alert(t("uploadFailed"));
   } finally {
     setUploading(false);
+    setBusyLabel(t("uploadingLabel"));
     renderAll();
   }
 }
@@ -270,12 +302,12 @@ function wireDrop(zone) {
   zone.addEventListener("drop", (e) => {
     e.preventDefault();
     zone.classList.remove("dragover");
-    uploadFile(e.dataTransfer.files[0]);
+    uploadFiles(e.dataTransfer.files);
   });
 }
 wireDrop($("#drop-big"));
 wireDrop($("#drop-small"));
-$("#file").onchange = (e) => { uploadFile(e.target.files[0]); e.target.value = ""; };
+$("#file").onchange = (e) => { uploadFiles(e.target.files); e.target.value = ""; };
 
 /* ---------- reveal card ---------- */
 
@@ -641,22 +673,46 @@ async function refresh() {
   const [tl, warn, qs, docs, cs] = await Promise.all([
     api("/api/timeline"), api("/api/warnings"), api("/api/questions"),
     api("/api/documents").catch(() => ({ documents: [] })),
-    api("/api/case").catch(() => ({ jurisdiction: "" })),
+    api("/api/case").catch(() => ({ jurisdiction: "", role: "" })),
   ]);
   state.events = tl.events;
   state.warnings = warn.warnings;
   state.questions = qs.questions;
   state.docs = docs.documents;
   state.jurisdiction = cs.jurisdiction;
+  state.role = cs.role || "";
   renderAll();
 }
 
 function renderCasebar() {
   const j = state.jurisdiction;
-  $("#casebar").classList.toggle("hidden", !j);
-  if (!j) return;
-  $("#casebar-court").textContent = j === "utah" ? t("courtUtah") : t("courtFed");
-  $("#casebar-rules").textContent = j === "utah" ? t("rulesUtah") : t("rulesFed");
+  const role = state.role;
+  // Visible while the court is known OR the user hasn't said which side
+  // they're on — the role question is part of setting up the case.
+  $("#casebar").classList.toggle("hidden", !j && !!role);
+  $("#casebar-court").textContent =
+    j ? (j === "utah" ? t("courtUtah") : t("courtFed")) : "";
+  $("#casebar-rules").textContent =
+    j ? (j === "utah" ? t("rulesUtah") : t("rulesFed")) : "";
+  const roleEl = $("#casebar-role");
+  if (role) {
+    const label = role === "plaintiff" ? t("rolePlaintiffLabel") : t("roleDefendantLabel");
+    roleEl.innerHTML = `<button class="role-chip" id="role-change"
+      title="${esc(t("roleChangeTitle"))}">${esc(t("roleYou")(label))}</button>`;
+    $("#role-change").onclick = () => { state.role = ""; renderCasebar(); };
+  } else {
+    roleEl.innerHTML = `<span class="role-q">${esc(t("roleQ"))}</span>
+      <button class="btn-small" id="role-p">${esc(t("rolePlaintiff"))}</button>
+      <button class="btn-small" id="role-d">${esc(t("roleDefendant"))}</button>`;
+    $("#role-p").onclick = () => setRole("plaintiff");
+    $("#role-d").onclick = () => setRole("defendant");
+  }
+}
+
+async function setRole(role) {
+  const data = await post("/api/case/role", { role });
+  state.role = data.role;
+  renderCasebar();
 }
 
 /* ---------- cases ---------- */

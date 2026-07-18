@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import config
 from app import (cases, store, timeline, ingest, extract, rag, ollama_client,
                  authorities, questions, obligations, deadlines, case_events,
-                 advice, jurisdiction, dates)
+                 advice, jurisdiction, dates, party)
 
 app = FastAPI(title="Case Companion")
 app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -21,6 +21,7 @@ def _startup():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     cases.init()          # must run first: other stores scope by the active case
     store.init_db()
+    jurisdiction.migrate_legacy()  # global jurisdiction key -> per-case
     timeline.init()
     authorities.init_db()
     questions.init()
@@ -82,7 +83,11 @@ async def upload(file: UploadFile = File(...)):
     facts = extract.key_facts(text)
 
     analysis = case_events.analyze(text)
-    filed = analysis["filed_date"] or _find_date(text) or now[:10]
+    # Date fallback order: the analyzer's pick (told to prefer the signature/
+    # DATED line), then the first date near the signature block at the bottom,
+    # then the first date anywhere, then upload day.
+    filed = (analysis["filed_date"] or _find_date(text[-3000:])
+             or _find_date(text) or now[:10])
     src = file.filename
     timeline.add_event(
         "filed", f"Filed: {src} ({analysis['doc_type']})", filed, source=src)
@@ -107,14 +112,21 @@ async def upload(file: UploadFile = File(...)):
             "and deadlines apply.",
             source=file.filename)
 
+    origin = party.origin(analysis["filed_by"])
     created = deadlines.apply(analysis["doc_type"], filed, file.filename,
-                              jurisdiction=current)
+                              jurisdiction=current, origin=origin)
     satisfied = obligations.try_satisfy(analysis["doc_type"])
+    role = party.get()
     for fault in analysis["faults"]:
+        fault_side = party.side_of(fault["who"])
+        if role and fault_side and fault_side != role:
+            tail = ("This concerns the other side and may matter to your "
+                    "case — ask your attorney about it.")
+        else:
+            tail = "Ask your attorney what happened here."
         questions.add(
             f"This {analysis['doc_type']} says: \"{fault['quote']}\" "
-            f"({fault['category']}, regarding {fault['who']}). "
-            "Ask your attorney what happened here.",
+            f"({fault['category']}, regarding {fault['who']}). {tail}",
             source=file.filename, context_quote=fault["quote"])
 
     return {"key_facts": facts, "chunks_added": len(chunks),
@@ -124,7 +136,9 @@ async def upload(file: UploadFile = File(...)):
             "obligations_satisfied": satisfied,
             "faults_flagged": analysis["faults"],
             "jurisdiction": current,
-            "jurisdiction_detected": detected}
+            "jurisdiction_detected": detected,
+            "filed_by": analysis["filed_by"],
+            "origin": origin}
 
 
 @app.post("/api/ask")
@@ -132,9 +146,19 @@ async def ask(body: AskBody):
     return rag.answer(body.question, body.language)
 
 
+class RoleBody(BaseModel):
+    role: str
+
+
 @app.get("/api/case")
 async def get_case():
-    return {"jurisdiction": jurisdiction.get_case()}
+    return {"jurisdiction": jurisdiction.get_case(), "role": party.get()}
+
+
+@app.post("/api/case/role")
+async def set_role(body: RoleBody):
+    party.set(body.role)  # invalid values are ignored
+    return {"jurisdiction": jurisdiction.get_case(), "role": party.get()}
 
 
 def _cases_state():

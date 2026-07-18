@@ -81,10 +81,23 @@ def detect(text: str) -> str:
 
 
 def get_case() -> str:
-    """The persisted jurisdiction of this case ('' until a filing reveals it)."""
-    return store.get_meta("jurisdiction")
+    """The persisted jurisdiction of the ACTIVE case ('' until a filing
+    reveals it). Scoped per case — two cases can be in different courts."""
+    from app import cases
+    return store.get_meta(f"jurisdiction:{cases.active_id()}")
 
 
 def set_case(jurisdiction: str) -> None:
+    from app import cases
     if jurisdiction in (UTAH, FEDERAL):
-        store.set_meta("jurisdiction", jurisdiction)
+        store.set_meta(f"jurisdiction:{cases.active_id()}", jurisdiction)
+
+
+def migrate_legacy() -> None:
+    """Early versions stored one global 'jurisdiction' key. Attribute it to the
+    active case (the only case that could have set it) and retire the key."""
+    legacy = store.get_meta("jurisdiction")
+    if legacy and not get_case():
+        set_case(legacy)
+    if legacy:
+        store.set_meta("jurisdiction", "")

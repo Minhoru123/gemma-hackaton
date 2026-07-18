@@ -40,8 +40,8 @@ def test_analyze_defaults_on_garbage(monkeypatch):
     monkeypatch.setattr(ollama_client, "generate",
                         lambda prompt, system="": "not json at all")
     a = case_events.analyze("text with no operative language")
-    assert a == {"doc_type": "other", "filed_date": "", "events": [],
-                 "faults": []}
+    assert a == {"doc_type": "other", "filed_date": "", "filed_by": "",
+                 "events": [], "faults": []}
 
 
 def test_content_signals_override_title_based_classification(monkeypatch):
