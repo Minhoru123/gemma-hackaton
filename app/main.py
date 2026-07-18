@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import config
 from app import (store, timeline, ingest, extract, rag, ollama_client,
                  authorities, questions, obligations, deadlines, case_events,
-                 advice)
+                 advice, jurisdiction)
 
 app = FastAPI(title="Case Companion")
 app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -84,7 +84,22 @@ async def upload(file: UploadFile = File(...)):
         when = _find_date(facts["deadline"], text) or now
         timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when)
 
-    created = deadlines.apply(analysis["doc_type"], filed, file.filename)
+    detected = jurisdiction.detect(text)
+    current = jurisdiction.get_case()
+    if detected and not current:
+        jurisdiction.set_case(detected)
+        current = detected
+    elif detected and current and detected != current:
+        questions.add(
+            f"{file.filename} appears to come from "
+            f"{jurisdiction.LABELS[detected]}, but earlier filings in this "
+            f"case are from {jurisdiction.LABELS[current]}. Ask your attorney "
+            "which court your case is in — the answer decides which rules "
+            "and deadlines apply.",
+            source=file.filename)
+
+    created = deadlines.apply(analysis["doc_type"], filed, file.filename,
+                              jurisdiction=current)
     satisfied = obligations.try_satisfy(analysis["doc_type"])
     for fault in analysis["faults"]:
         questions.add(
@@ -98,12 +113,19 @@ async def upload(file: UploadFile = File(...)):
             "events_added": len(analysis["events"]),
             "presumptive_deadlines": created,
             "obligations_satisfied": satisfied,
-            "faults_flagged": analysis["faults"]}
+            "faults_flagged": analysis["faults"],
+            "jurisdiction": current,
+            "jurisdiction_detected": detected}
 
 
 @app.post("/api/ask")
 async def ask(body: AskBody):
     return rag.answer(body.question, body.language)
+
+
+@app.get("/api/case")
+async def get_case():
+    return {"jurisdiction": jurisdiction.get_case()}
 
 
 @app.get("/api/documents")

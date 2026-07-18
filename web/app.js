@@ -55,6 +55,10 @@ const STR = {
     exampleAdvice: "You have 30 days to respond to the complaint. The hearing is at 9 AM. You don't need to file anything before the hearing.",
     revealTitle: "Here's what I found in", rType: "Document type", rFiled: "Filed",
     rSummary: "Summary", rClose: "Got it", flaggedLabel: "Flagged for your attorney",
+    rCourt: "Court",
+    courtUtah: "Utah state court", courtFed: "Federal court",
+    rulesUtah: "Deadlines are computed from Utah state rules",
+    rulesFed: "Deadlines are computed from federal rules",
     rEvents: (n) => `${n} event${n === 1 ? "" : "s"} added to your timeline`,
     rDeadlines: (n) => `${n} presumptive deadline${n === 1 ? "" : "s"} computed`,
     rFlags: (n) => `${n} sentence${n === 1 ? "" : "s"} flagged for your attorney`,
@@ -120,6 +124,10 @@ const STR = {
     exampleAdvice: "Tiene 30 días para responder a la demanda. La audiencia es a las 9 AM. No necesita presentar nada antes de la audiencia.",
     revealTitle: "Esto es lo que encontré en", rType: "Tipo de documento", rFiled: "Presentado",
     rSummary: "Resumen", rClose: "Entendido", flaggedLabel: "Señalado para su abogado",
+    rCourt: "Tribunal",
+    courtUtah: "Tribunal estatal de Utah", courtFed: "Tribunal federal",
+    rulesUtah: "Los plazos se calculan con las reglas estatales de Utah",
+    rulesFed: "Los plazos se calculan con las reglas federales",
     rEvents: (n) => `${n} evento${n === 1 ? "" : "s"} agregado${n === 1 ? "" : "s"} a su cronología`,
     rDeadlines: (n) => `${n} plazo${n === 1 ? "" : "s"} presunto${n === 1 ? "" : "s"} calculado${n === 1 ? "" : "s"}`,
     rFlags: (n) => `${n} oraci${n === 1 ? "ón señalada" : "ones señaladas"} para su abogado`,
@@ -142,6 +150,7 @@ const state = {
   checking: false,
   msgs: [],                 // {kind:'user'|'answer'|'idk'|'error', text, cits, q}
   reveal: null,             // last upload analysis
+  jurisdiction: "",         // 'utah' | 'federal' | '' (unknown)
   events: [], warnings: [], questions: [], docs: [],
   resolvedLocal: new Set(), // question ids checked this session
   adviceResult: null,
@@ -265,6 +274,8 @@ function renderReveal() {
   const summary = r.key_facts && r.key_facts.summary && r.key_facts.summary !== "Not stated"
     ? r.key_facts.summary : "";
   const quote = nf ? r.faults_flagged[0].quote : "";
+  const court = r.jurisdiction === "utah" ? t("courtUtah")
+    : r.jurisdiction === "federal" ? t("courtFed") : "";
 
   el.className = "reveal";
   el.innerHTML = `
@@ -272,6 +283,7 @@ function renderReveal() {
     <div class="reveal-meta">
       <div><div class="meta-label">${esc(t("rType"))}</div><div class="meta-value">${esc(r.doc_type || "—")}</div></div>
       <div><div class="meta-label">${esc(t("rFiled"))}</div><div class="meta-value">${esc(r.filed_date ? fmtLong(r.filed_date) : "—")}</div></div>
+      ${court ? `<div><div class="meta-label">${esc(t("rCourt"))}</div><div class="meta-value">${esc(court)}</div></div>` : ""}
     </div>
     ${summary ? `<div class="reveal-quote"><div class="meta-label">${esc(t("rSummary"))}</div><div class="serif-quote">${esc(summary)}</div></div>` : ""}
     <div class="reveal-rows">
@@ -331,7 +343,7 @@ function renderTimeline() {
   const today = todayISO();
   const rows = state.events.map((e) => {
     let label = e.label, sub = "";
-    const m = label.match(/\s*\(PRESUMPTIVE[^;)]*(?:;\s*([^)]*))?\)\s*$/);
+    const m = label.match(/\s*\(PRESUMPTIVE[^;)]*(?:;\s*(.*))?\)\s*$/);
     if (m) { sub = m[1] || ""; label = label.slice(0, m.index); }
     const day = (e.when || "").slice(0, 10);
     const kind = e.kind === "presumptive_deadline" ? "pres" : day > today ? "future" : "past";
@@ -558,21 +570,32 @@ $("#checkadvice").onclick = async () => {
 /* ---------- data loading / top-level render ---------- */
 
 async function refresh() {
-  const [tl, warn, qs, docs] = await Promise.all([
+  const [tl, warn, qs, docs, cs] = await Promise.all([
     api("/api/timeline"), api("/api/warnings"), api("/api/questions"),
     api("/api/documents").catch(() => ({ documents: [] })),
+    api("/api/case").catch(() => ({ jurisdiction: "" })),
   ]);
   state.events = tl.events;
   state.warnings = warn.warnings;
   state.questions = qs.questions;
   state.docs = docs.documents;
+  state.jurisdiction = cs.jurisdiction;
   renderAll();
+}
+
+function renderCasebar() {
+  const j = state.jurisdiction;
+  $("#casebar").classList.toggle("hidden", !j);
+  if (!j) return;
+  $("#casebar-court").textContent = j === "utah" ? t("courtUtah") : t("courtFed");
+  $("#casebar-rules").textContent = j === "utah" ? t("rulesUtah") : t("rulesFed");
 }
 
 function renderAll() {
   const empty = !state.events.length && !state.docs.length;
   $("#empty").classList.toggle("hidden", !empty);
   $("#app").classList.toggle("hidden", empty);
+  renderCasebar();
   renderReveal();
   renderWarnings();
   renderTimeline();

@@ -2,7 +2,14 @@
 says what it triggers and in how many days. Every date this module produces is
 PRESUMPTIVE — labeled as such everywhere it appears, never treated as
 authoritative. The count ignores service method, weekends, holidays, and local
-variations; only a human (or their attorney) can confirm the real date."""
+variations; only a human (or their attorney) can confirm the real date.
+
+A case is governed by ONE rule set. Each rule carries a "jurisdiction" tag
+('utah' or 'federal'), and apply() only fires rules whose tag matches the
+case's jurisdiction — never both. While the jurisdiction is still unknown
+(''), no tagged rule fires: computing a deadline from the wrong court's rules
+is worse than computing none. Untagged rules (no "jurisdiction" key) fire only
+while the jurisdiction is unknown, preserving legacy generic-rules behavior."""
 
 import json
 import datetime
@@ -17,13 +24,17 @@ def load_rules() -> list[dict]:
         return json.load(f)
 
 
-def apply(doc_type: str, filed_date: str, source_name: str) -> list[dict]:
+def apply(doc_type: str, filed_date: str, source_name: str,
+          jurisdiction: str = "") -> list[dict]:
     """Create presumptive obligations triggered by this filing. filed_date is
-    ISO (YYYY-MM-DD); falls back to today if missing. Returns created items."""
+    ISO (YYYY-MM-DD); falls back to today if missing. Only rules matching the
+    case's jurisdiction fire (see module docstring). Returns created items."""
     filed_date = filed_date or datetime.date.today().isoformat()
     created = []
     for rule in load_rules():
         if rule["trigger_doc_type"] != doc_type:
+            continue
+        if rule.get("jurisdiction", "") != jurisdiction:
             continue
         due = (datetime.date.fromisoformat(filed_date)
                + datetime.timedelta(days=rule["days"])).isoformat()

@@ -19,6 +19,33 @@ def init_db() -> None:
             source TEXT, kind TEXT, text TEXT, embedding TEXT
         )"""
     )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS case_meta (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    c.commit()
+    c.close()
+
+
+def get_meta(key: str) -> str:
+    c = _conn()
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS case_meta (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    row = c.execute("SELECT value FROM case_meta WHERE key=?", (key,)).fetchone()
+    c.close()
+    return row[0] if row else ""
+
+
+def set_meta(key: str, value: str) -> None:
+    c = _conn()
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS case_meta (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    c.execute(
+        "INSERT INTO case_meta (key, value) VALUES (?,?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value),
+    )
     c.commit()
     c.close()
 

@@ -33,6 +33,12 @@ header { background: #2E3A66; color: #FFF; padding: 13px 28px;
   background: transparent; color: rgba(255,255,255,0.8); }
 .langswitch button.active { background: #FFF; color: #2E3A66; }
 
+/* Case strip */
+.casebar { background: #EDEAE1; border-bottom: 1px solid #E0DACB;
+  padding: 8px 28px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.casebar-court { font-size: 13.5px; font-weight: 650; }
+.casebar-rules { font-size: 12.5px; color: #6E6A61; }
+
 /* Empty state */
 .empty { flex: 1; display: flex; align-items: flex-start; justify-content: center;
   padding: 64px 24px; }
