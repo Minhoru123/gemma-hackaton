@@ -52,6 +52,8 @@ def _check_claim(claim: str) -> dict:
 def check(advice_text: str) -> dict:
     """Cross-check each claim in the advice; queue conflicts and gaps as
     ask-your-attorney questions."""
+    if not advice_text.strip():
+        return {"claims": [], "note": "No advice text provided."}
     results = [_check_claim(c) for c in _extract_claims(advice_text)]
     for r in results:
         if r["verdict"] == "conflicts":

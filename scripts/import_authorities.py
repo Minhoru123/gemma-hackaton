@@ -87,7 +87,16 @@ def main():
 
     if args.embed_holdings or args.embed_rules:
         from app import store  # imports Ollama client — only needed here
+        import sqlite3
+        import config
         store.init_db()
+        # Re-embedding replaces the authority index rather than appending to it.
+        c = sqlite3.connect(config.DB_PATH)
+        cleared = c.execute("DELETE FROM chunks WHERE kind='authority'").rowcount
+        c.commit()
+        c.close()
+        if cleared:
+            print(f"cleared {cleared} previously embedded authority chunks")
         n = 0
         for row in rows:
             if args.embed_holdings and row.get("holding"):
