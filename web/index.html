@@ -19,6 +19,7 @@
     <section class="col">
       <div id="drop" class="drop">Drop a PDF or text file, or click to choose</div>
       <input id="file" type="file" accept=".pdf,.txt,.md" hidden />
+      <div id="warnings" class="card"></div>
       <div id="facts" class="card hidden"></div>
       <div id="timeline" class="card"></div>
     </section>
@@ -29,6 +30,18 @@
         <input id="q" placeholder="Ask a question about your case…" autocomplete="off" />
         <button>Ask</button>
       </form>
+      <div id="questions" class="card"></div>
+      <div class="card">
+        <h3>Second opinion</h3>
+        <p class="hint">Paste advice from your lawyer. Each claim is checked
+          against the captured text of your documents, rights corpus, and
+          authorities — it reports matches and mismatches with the text, not
+          whether the advice is legally correct.</p>
+        <textarea id="advice" rows="4"
+          placeholder="Paste the advice here…"></textarea>
+        <button id="checkadvice">Check against captured text</button>
+        <div id="adviceresult"></div>
+      </div>
     </section>
   </main>
 

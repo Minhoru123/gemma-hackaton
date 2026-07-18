@@ -1,0 +1,16 @@
+[
+  {
+    "trigger_doc_type": "motion",
+    "obligation": "File opposition to {source}",
+    "satisfied_by": "opposition",
+    "days": 14,
+    "rule_cite": "URCP 7 / DUCivR 7-1 — EXAMPLE RULE: verify the period for your court before relying on it"
+  },
+  {
+    "trigger_doc_type": "opposition",
+    "obligation": "File reply in support of the motion opposed by {source}",
+    "satisfied_by": "reply",
+    "days": 14,
+    "rule_cite": "URCP 7 / DUCivR 7-1 — EXAMPLE RULE: verify the period for your court before relying on it"
+  }
+]

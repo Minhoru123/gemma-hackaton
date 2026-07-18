@@ -8,7 +8,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
-from app import store, timeline, ingest, extract, rag, ollama_client
+from app import (store, timeline, ingest, extract, rag, ollama_client,
+                 authorities, questions, obligations, deadlines, case_events,
+                 advice)
 
 app = FastAPI(title="Case Companion")
 app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -20,6 +22,9 @@ def _startup():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     store.init_db()
     timeline.init()
+    authorities.init_db()
+    questions.init()
+    obligations.init()
     ollama_client.warmup()
 
 
@@ -46,9 +51,16 @@ class AskBody(BaseModel):
     language: str = "English"
 
 
-class DraftBody(BaseModel):
+class AdviceBody(BaseModel):
+    text: str
+
+
+class QuestionBody(BaseModel):
     question: str
-    key_fact: str = ""
+
+
+class IdBody(BaseModel):
+    id: int
 
 
 @app.post("/api/upload")
@@ -60,14 +72,33 @@ async def upload(file: UploadFile = File(...)):
     chunks = ingest.chunk_text(text)
     store.add_chunks(file.filename, chunks, kind="upload")
     now = datetime.datetime.now().isoformat(timespec="minutes")
-    timeline.add_event("upload", f"Uploaded {file.filename}", now)
     facts = extract.key_facts(text)
+
+    analysis = case_events.analyze(text)
+    filed = analysis["filed_date"] or _find_date(text) or now[:10]
+    timeline.add_event(
+        "filed", f"Filed: {file.filename} ({analysis['doc_type']})", filed)
+    for ev in analysis["events"]:
+        timeline.add_event("case_event", ev["event"], ev["date"])
     if facts.get("deadline") and facts["deadline"] != "Not stated":
-        # Sort by a real calendar date if we can find one (in the deadline text or the
-        # document); otherwise fall back to the upload time so it still appears in order.
         when = _find_date(facts["deadline"], text) or now
         timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when)
-    return {"key_facts": facts, "chunks_added": len(chunks)}
+
+    created = deadlines.apply(analysis["doc_type"], filed, file.filename)
+    satisfied = obligations.try_satisfy(analysis["doc_type"])
+    if analysis["fault"]["found"]:
+        questions.add(
+            f"This {analysis['doc_type']} says: \"{analysis['fault']['quote']}\" "
+            f"({analysis['fault']['issue']}, regarding {analysis['fault']['who']}). "
+            "Ask your attorney what happened here.",
+            source=file.filename, context_quote=analysis["fault"]["quote"])
+
+    return {"key_facts": facts, "chunks_added": len(chunks),
+            "doc_type": analysis["doc_type"], "filed_date": filed,
+            "events_added": len(analysis["events"]),
+            "presumptive_deadlines": created,
+            "obligations_satisfied": satisfied,
+            "fault_flagged": analysis["fault"]["found"]}
 
 
 @app.post("/api/ask")
@@ -80,16 +111,37 @@ async def get_timeline():
     return {"events": timeline.list_events()}
 
 
-@app.post("/api/draft-lawyer")
-async def draft_lawyer(body: DraftBody):
-    subject = "Question about my case"
-    body_text = (
-        "Hello,\n\nI'm using Case Companion to understand my case and I have a question.\n\n"
-        f"Regarding: {body.key_fact or 'my case'}\n"
-        f"My question: {body.question}\n\n"
-        "Could you please advise? Thank you."
-    )
-    return {"subject": subject, "body": body_text}
+@app.post("/api/check-advice")
+async def check_advice(body: AdviceBody):
+    return advice.check(body.text)
+
+
+@app.get("/api/questions")
+async def get_questions():
+    return {"questions": questions.list_open()}
+
+
+@app.post("/api/questions/add")
+async def add_question(body: QuestionBody):
+    questions.add(body.question, source="user")
+    return {"questions": questions.list_open()}
+
+
+@app.post("/api/questions/resolve")
+async def resolve_question(body: IdBody):
+    questions.resolve(body.id)
+    return {"questions": questions.list_open()}
+
+
+@app.get("/api/warnings")
+async def get_warnings():
+    return {"warnings": obligations.warnings()}
+
+
+@app.post("/api/obligations/satisfy")
+async def satisfy_obligation(body: IdBody):
+    obligations.satisfy(body.id)
+    return {"warnings": obligations.warnings()}
 
 
 @app.get("/")

@@ -28,6 +28,45 @@ Make sure both are pulled before first run:
 The first question after startup is slower while the model loads into memory. Ask one
 warm-up question before a demo so the model is hot.
 
+## Case-watch features
+
+Everything below surfaces information to the user; the system never contacts
+anyone on the user's behalf.
+
+**Timeline.** Every upload is analyzed (document type, filed date, and all dated
+events it mentions) and placed on the case timeline, alongside extracted
+deadlines and presumptive deadlines.
+
+**Presumptive deadlines.** `deadline_rules.json` maps filing types to what they
+trigger (e.g. a motion triggers an opposition in 14 days). Dates computed from
+it are always labeled *presumptive — confirm with the court or your attorney*:
+the count ignores service method, weekends, holidays, and local variations.
+The shipped rules are EXAMPLES — edit the file and verify each period for your
+court. Deadlines a human confirms directly are the authoritative ones.
+
+**Warnings & to-do.** Filings create open obligations (tracked in the database);
+the Warnings panel shows what is still open, sorted overdue → due soon → open.
+Uploading a document of the awaited type (e.g. an opposition) automatically
+satisfies the matching obligation; anything can also be marked done by hand.
+Warnings appear when the app is opened — nothing runs in the background.
+
+**Watchdog.** When an uploaded court order attributes a procedural failure to
+someone (untimely filing, waiver, missed response), the exact sentence is
+flagged and routed to the ask-your-attorney list. The system reports the
+signal with the quote; it never issues a verdict about the lawyer.
+
+**Ask your attorney.** A running list of things worth raising with counsel:
+watchdog flags, advice-check mismatches, and questions the user adds. Items
+are checked off once asked.
+
+**Second opinion.** Paste advice from a lawyer into the Second Opinion panel.
+Each checkable claim is compared against captured text (rights corpus,
+uploaded case documents, captured authorities) and reported as *matches /
+conflicts with / not covered by* the captured text, with the text quoted.
+It deliberately never says the lawyer is right or wrong — conflicts and gaps
+become ask-your-attorney questions instead. Capture the rules and authorities
+for your case with `add_authority.py` (below) to make this check meaningful.
+
 ## Drafting-discipline tooling
 
 Beyond Q&A, the repo includes mechanical tooling for verified legal drafting. The rule

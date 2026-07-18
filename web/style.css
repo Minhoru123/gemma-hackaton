@@ -35,4 +35,24 @@ button:hover { background: #3a3d8a; }
 footer { text-align: center; padding: 12px; color: #777; font-size: .82rem; }
 .tl-item { display: flex; gap: 8px; padding: 5px 0; font-size: .9rem; }
 .tl-when { color: #2b2d6e; font-weight: 600; min-width: 96px; }
+.tl-item.presumptive { color: #8a6d00; }
 h3 { margin: 0 0 10px; font-size: 1rem; }
+.hint { color: #777; font-size: .82rem; margin: 0 0 8px; }
+.warn { border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: .9rem;
+  display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.warn.overdue { background: #fdecea; color: #a12; }
+.warn.due_soon { background: #fff7e0; color: #8a6d00; }
+.warn.open { background: #eef0fb; }
+.warn button { padding: 4px 8px; font-size: .78rem; }
+.q-item { background: #f4f5fb; border-left: 3px solid #2b2d6e; border-radius: 6px;
+  padding: 8px 10px; margin: 6px 0; font-size: .88rem;
+  display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.q-item button { padding: 4px 8px; font-size: .78rem; }
+#advice { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px;
+  font-family: inherit; margin-bottom: 8px; resize: vertical; }
+.claim { border-radius: 8px; padding: 8px 10px; margin: 6px 0; font-size: .88rem; }
+.claim.matches { background: #ecf7ed; }
+.claim.conflicts { background: #fdecea; }
+.claim.not_covered, .claim.unclear { background: #fff7e0; }
+.claim .verdict { font-weight: 700; text-transform: uppercase; font-size: .75rem; }
+.claim .quote { display: block; color: #555; font-style: italic; margin-top: 4px; }

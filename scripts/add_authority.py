@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--source-url", default="")
     ap.add_argument("--retrieved", default="")
     ap.add_argument("--confirmed-by", default="")
+    ap.add_argument("--no-embed", action="store_true",
+                    help="skip embedding into the search index (no Ollama needed)")
     args = ap.parse_args()
 
     with open(args.file, "r", encoding="utf-8") as f:
@@ -39,8 +41,15 @@ def main():
         source_url=args.source_url, retrieved_date=args.retrieved,
         confirmed_by=args.confirmed_by,
     )
+    if not args.no_embed:
+        # Embed captured text so Q&A and the advice cross-check can find it.
+        from app import store, ingest
+        store.init_db()
+        source = f"{args.name}, {args.citation}"
+        store.add_chunks(source, ingest.chunk_text(captured), kind="authority")
     status = "confirmed" if args.confirmed_by else "UNCONFIRMED (Tier 2 — not citable)"
-    print(f"captured {args.citation} ({args.name}) — {status}")
+    embedded = "skipped" if args.no_embed else "indexed for search"
+    print(f"captured {args.citation} ({args.name}) — {status}; {embedded}")
 
 
 if __name__ == "__main__":
