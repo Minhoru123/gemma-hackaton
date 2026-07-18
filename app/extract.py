@@ -22,10 +22,23 @@ def _extract_json(text: str) -> dict:
         return {}
 
 
+def _as_text(value) -> str:
+    """Flatten a field value into readable text. The model often returns
+    parties (and sometimes other fields) as a JSON array or object; str() on
+    those leaks Python brackets/quotes into the UI, so join them by hand."""
+    if isinstance(value, list):
+        parts = [_as_text(v) for v in value]
+        return ", ".join(p for p in parts if p)
+    if isinstance(value, dict):
+        parts = [f"{k}: {_as_text(v)}" for k, v in value.items()]
+        return "; ".join(p for p in parts if p)
+    return str(value)
+
+
 def key_facts(document_text: str) -> dict:
     raw = ollama_client.generate(_PROMPT.format(doc=document_text[:4000]))
     data = _extract_json(raw)
-    out = {f: str(data.get(f, "Not stated")) or "Not stated" for f in _FIELDS}
+    out = {f: _as_text(data.get(f, "Not stated")) or "Not stated" for f in _FIELDS}
     risks = data.get("risks", [])
     out["risks"] = [str(r) for r in risks] if isinstance(risks, list) else []
     return out
