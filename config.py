@@ -1,5 +1,12 @@
 OLLAMA_URL = "http://localhost:11434"
-GEN_MODEL = "hf.co/unsloth/gemma-4-E2B-it-GGUF:latest"  # swap to "gemma4:latest" on a faster machine
+
+# --- Generation model -------------------------------------------------------
+# To use the bigger, higher-quality model on a faster machine, comment out the
+# E2B line and uncomment the gemma4 line below. See README ("Switching models").
+GEN_MODEL = "hf.co/unsloth/gemma-4-E2B-it-GGUF:latest"  # fast, default (needs think=False)
+# GEN_MODEL = "gemma4:latest"                           # slower, better answers
+# ----------------------------------------------------------------------------
+
 EMBED_MODEL = "nomic-embed-text"
 DB_PATH = "data/case_companion.db"
 TOP_K = 4                 # retrieved chunks per query
