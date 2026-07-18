@@ -859,6 +859,7 @@ async function switchCase(id) {
   state.msgs = [];
   state.adviceResult = null;
   state.resolvedLocal = new Set();
+  state.view = "";   // re-derive from the new case's role
   renderCases();
   await refresh();
 }
@@ -882,6 +883,7 @@ $("#case-new").onclick = async () => {
   state.msgs = [];
   state.adviceResult = null;
   state.resolvedLocal = new Set();
+  state.view = "";   // new case: role not asked yet
   renderCases();
   await refresh();
 };

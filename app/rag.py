@@ -70,9 +70,12 @@ def suggest_arguments(obligation: dict, language: str = "English") -> dict:
     prompt = _SUGGEST_PROMPT.format(
         side=side, obligation=obligation["label"], language=language,
         name=obligation["trigger_source"], text=text[:_SUMMARY_CHARS])
+    # No RAG system prompt here: its "say you don't have that information"
+    # reflex suppresses idea generation; the suggest prompt carries its own
+    # grounding rules (document-only, no invented facts or law).
     return {"found": True,
             "suggestions": ollama_client.strip_markdown(
-                ollama_client.generate(prompt, system=SYSTEM)),
+                ollama_client.generate(prompt)),
             "for": obligation["label"],
             "source": obligation["trigger_source"]}
 

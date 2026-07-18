@@ -72,18 +72,35 @@ def test_invalid_filed_date_falls_back_to_today_not_crash(tmp_path):
     assert created[0]["due_date"] > "2026-07-01"  # computed from today instead
 
 
-def test_users_own_filing_creates_no_obligation_for_user(tmp_path):
+def test_deadline_is_owed_by_the_responding_side(tmp_path):
     config.DB_PATH = str(tmp_path / "t.db")
     obligations.init()
     timeline.init()
-    # The user filed the motion — the opposition is the OTHER side's duty.
-    assert deadlines.apply("motion", "2026-07-01", "my_motion.pdf",
-                           jurisdiction="utah", origin="user") == []
+    # Plaintiff files a motion -> the opposition is the DEFENDANT's duty.
+    created = deadlines.apply("motion", "2026-07-01", "p_motion.pdf",
+                              jurisdiction="utah", filed_by="plaintiff")
+    assert created[0]["owed_by"] == "defendant"
+    # The plaintiff's view hides it; the defendant's view (and no view) show it.
+    assert obligations.warnings(today="2026-07-02", view="plaintiff") == []
+    assert len(obligations.warnings(today="2026-07-02", view="defendant")) == 1
+    assert len(obligations.warnings(today="2026-07-02")) == 1
+    # The timeline entry names whose deadline it is.
+    labels = [e["label"] for e in timeline.list_events()]
+    assert any(l.startswith("Defendant/Respondent's deadline:") for l in labels)
+
+
+def test_side_aware_satisfy(tmp_path):
+    config.DB_PATH = str(tmp_path / "t.db")
+    obligations.init()
+    timeline.init()
+    deadlines.apply("motion", "2026-07-01", "p_motion.pdf",
+                    jurisdiction="utah", filed_by="plaintiff")
+    # The plaintiff filing an opposition does NOT discharge the defendant's duty.
+    assert obligations.try_satisfy("opposition", filed_by="plaintiff") == []
+    # The defendant's opposition does.
+    satisfied = obligations.try_satisfy("opposition", filed_by="defendant")
+    assert len(satisfied) == 1
     assert obligations.list_open() == []
-    # Opponent's motion (or unknown origin) still fires.
-    created = deadlines.apply("motion", "2026-07-01", "their_motion.pdf",
-                              jurisdiction="utah", origin="opponent")
-    assert len(created) == 1
 
 
 def test_unknown_doc_type_triggers_nothing(tmp_path):
