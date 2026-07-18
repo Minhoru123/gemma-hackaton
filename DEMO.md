@@ -59,5 +59,5 @@ without internet."
 
 ## If the model is too slow on the demo machine
 
-Edit `config.py`: the E2B model is the fast default. `gemma4:latest` gives better answers
-but is slower — only use it if the machine is fast enough.
+The app runs `gemma4:latest`. Ask a warm-up question before the demo so the model is
+loaded and hot; the first answer after startup is always the slowest.

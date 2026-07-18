@@ -18,7 +18,7 @@ def _post(path: str, payload: dict) -> dict:
 
 
 def strip_scaffold(text: str) -> str:
-    """Remove E2B reasoning-model channel scaffolding, keep the final answer."""
+    """Remove reasoning-model channel scaffolding, keep the final answer."""
     text = _THOUGHT_RE.sub("", text)
     text = _TAG_RE.sub("", text)
     # Some builds prefix the final answer with 'final'/'answer' channel words.
@@ -32,9 +32,9 @@ def embed(text: str) -> list[float]:
 
 
 def generate(prompt: str, system: str = "") -> str:
-    # think=False disables the E2B reasoning model's chain-of-thought so it returns
-    # only the final answer (faster, and no scaffold to strip). strip_scaffold stays
-    # as a fallback in case a model build ignores the flag.
+    # think=False disables chain-of-thought on reasoning-capable model builds so
+    # they return only the final answer. strip_scaffold stays as a fallback in
+    # case a model build ignores the flag.
     payload = {"model": config.GEN_MODEL, "prompt": prompt,
                "stream": False, "think": False}
     if system:

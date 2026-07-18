@@ -17,34 +17,60 @@ Open http://localhost:8000
 
 The app uses two local Ollama models, both fully offline:
 
-- **Generation:** `hf.co/unsloth/gemma-4-E2B-it-GGUF:latest` (fast, default)
+- **Generation:** `gemma4:latest`
 - **Embeddings:** `nomic-embed-text`
+
+Make sure both are pulled before first run:
+
+    ollama pull gemma4:latest
+    ollama pull nomic-embed-text
 
 The first question after startup is slower while the model loads into memory. Ask one
 warm-up question before a demo so the model is hot.
 
-## Switching to the bigger model
+## Drafting-discipline tooling
 
-The default E2B model is fast and good enough for most machines. On a faster machine,
-`gemma4:latest` gives noticeably better answers (but is slower: ~100s per answer on a
-laptop without a strong GPU, vs ~a few seconds for E2B).
+Beyond Q&A, the repo includes mechanical tooling for verified legal drafting. The rule
+it enforces: **nothing uncaptured goes in a draft.** All of it is pure Python, fully
+offline, and covered by `tests/`.
 
-To switch:
+**Authorities library.** Every authority a draft may cite is a row in the `authorities`
+table (same SQLite database), with captured full text and provenance. Rows without a
+`confirmed_by` value are Tier 2 (web-sourced, awaiting sign-off) and are not citable.
 
-1. Make sure the model is pulled:
+    python scripts/add_authority.py --name "United States v. Salerno" \
+        --citation "481 U.S. 739" --file salerno.txt --type case \
+        --court "U.S. Supreme Court" --year 1987 \
+        --source-url https://... --retrieved 2026-07-18 --confirmed-by David
 
-       ollama pull gemma4:latest
+**Draft verification.** Runs on every draft before filing; exits nonzero on any hard
+failure so it can gate a build:
 
-2. In `config.py`, comment out the E2B line and uncomment the gemma4 line:
+    python scripts/verify_draft.py draft.md [--coverage coverage_map.md]
 
-       # GEN_MODEL = "hf.co/unsloth/gemma-4-E2B-it-GGUF:latest"
-       GEN_MODEL = "gemma4:latest"
+Checks: every citation resolves to a *confirmed* library row (with citation-form
+canonicalization); every quotation of 15+ characters matches the cited authorities'
+captured text verbatim (ellipsis- and [bracket]-tolerant); no `[[MARKER]]` remains;
+and, with `--coverage`, no contention in the coverage map is left unanswered.
 
-3. Restart the server. No other code changes are needed — both models work with the
-   same `think=False` setting the app already sends.
+**Intake lane.** Drop filings (yours or opposing) into `intake/`; each is scanned for
+citations, diffed against the library, and unknowns are queued on
+`data/FETCH_LIST.md` for capture. Processed files move to `intake/completed/`.
 
-To switch back, reverse the two comment markers. Only one `GEN_MODEL` line should be
-active at a time.
+    python scripts/process_intake.py
 
-**Tip:** decide which model to demo on based on the machine's speed. If answers take more
-than a few seconds, stay on E2B.
+**Coverage maps.** Seed a checklist of an opposing filing's contentions; check boxes
+as the responsive draft answers them; verify with `--coverage`:
+
+    python scripts/seed_coverage_map.py their_motion.pdf coverage_map.md
+
+**Filing builder.** Builds a court-ready .docx (two-column caption, Times New Roman
+13pt, double-spaced); unresolved `[[MARKERS]]` render bold-on-yellow:
+
+    python scripts/build_filing_docx.py draft.md caption.json out.docx
+
+`caption.json` keys: `court`, `plaintiff`, `defendant`, `case_no`, `judge`, `title`.
+
+The recommended pipeline per document: draft → `verify_draft.py` (fix until clean) →
+`build_filing_docx.py`. Deadlines are never computed by the system — they are entered
+by a human. Currency/good-law checking is out of scope (offline by design).

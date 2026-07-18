@@ -3,5 +3,7 @@ __pycache__/
 .venv/
 venv/
 data/*.db
+data/FETCH_LIST.md
+intake/
 uploads/
 SYSTEM_DESCRIPTION.md
