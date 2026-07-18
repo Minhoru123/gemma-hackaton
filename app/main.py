@@ -1,5 +1,6 @@
 import os
 import datetime
+import logging
 import shutil
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
@@ -75,6 +76,24 @@ class IdBody(BaseModel):
     id: int
 
 
+_NO_FACTS = {"summary": "Not stated", "parties": "Not stated",
+             "deadline": "Not stated", "amount": "Not stated",
+             "action_required": "Not stated", "risks": []}
+_NO_ANALYSIS = {"doc_type": "other", "filed_date": "", "filed_by": "",
+                "events": [], "faults": []}
+
+
+def _safe(stage: str, fn, default, issues: list):
+    """Run one post-storage analysis stage; a failure degrades that stage
+    instead of failing the whole upload (the document is already saved)."""
+    try:
+        return fn()
+    except Exception as e:
+        logging.exception(f"upload stage '{stage}' failed")
+        issues.append(stage)
+        return default
+
+
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
     path = os.path.join(UPLOAD_DIR, file.filename)
@@ -83,57 +102,77 @@ async def upload(file: UploadFile = File(...)):
     text = ingest.extract_text(path)
     chunks = ingest.chunk_text(text)
     store.add_chunks(file.filename, chunks, kind="upload")
+    # From here on the document IS saved: no later stage may 500 the upload.
+    issues: list = []
     now = datetime.datetime.now().isoformat(timespec="minutes")
-    facts = extract.key_facts(text)
+    facts = _safe("key_facts", lambda: extract.key_facts(text),
+                  dict(_NO_FACTS), issues)
 
-    analysis = case_events.analyze(text)
+    analysis = _safe("analysis", lambda: case_events.analyze(text),
+                     dict(_NO_ANALYSIS), issues)
     # Date fallback order: the analyzer's pick (told to prefer the signature/
     # DATED line), then the first date near the signature block at the bottom,
     # then the first date anywhere, then upload day.
     filed = (analysis["filed_date"] or _find_date(text[-3000:])
              or _find_date(text) or now[:10])
     src = file.filename
-    timeline.add_event(
-        "filed", f"Filed: {src} ({analysis['doc_type']})", filed, source=src)
-    for ev in analysis["events"]:
-        timeline.add_event("case_event", ev["event"], ev["date"], source=src)
-    if facts.get("deadline") and facts["deadline"] != "Not stated":
-        when = _find_date(facts["deadline"], text) or now
-        timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when,
-                           source=src)
 
-    detected = jurisdiction.detect(text)
-    current = jurisdiction.get_case()
-    if detected and not current:
-        jurisdiction.set_case(detected)
-        current = detected
-    elif detected and current and detected != current:
-        questions.add(
-            f"{file.filename} appears to come from "
-            f"{jurisdiction.LABELS[detected]}, but earlier filings in this "
-            f"case are from {jurisdiction.LABELS[current]}. Ask your attorney "
-            "which court your case is in — the answer decides which rules "
-            "and deadlines apply.",
-            source=file.filename)
+    def _timeline_stage():
+        timeline.add_event(
+            "filed", f"Filed: {src} ({analysis['doc_type']})", filed, source=src)
+        for ev in analysis["events"]:
+            timeline.add_event("case_event", ev["event"], ev["date"], source=src)
+        if facts.get("deadline") and facts["deadline"] != "Not stated":
+            when = _find_date(facts["deadline"], text) or now
+            timeline.add_event("case_date", f"Deadline: {facts['deadline']}",
+                               when, source=src)
+    _safe("timeline", _timeline_stage, None, issues)
+
+    def _jurisdiction_stage():
+        detected = jurisdiction.detect(text)
+        current = jurisdiction.get_case()
+        if detected and not current:
+            jurisdiction.set_case(detected)
+            current = detected
+        elif detected and current and detected != current:
+            questions.add(
+                f"{src} appears to come from "
+                f"{jurisdiction.LABELS[detected]}, but earlier filings in this "
+                f"case are from {jurisdiction.LABELS[current]}. Ask your "
+                "attorney which court your case is in — the answer decides "
+                "which rules and deadlines apply.",
+                source=src)
+        return detected, current
+    detected, current = _safe("jurisdiction", _jurisdiction_stage,
+                              ("", jurisdiction.get_case()), issues)
 
     origin = party.origin(analysis["filed_by"])
-    created = deadlines.apply(analysis["doc_type"], filed, file.filename,
-                              jurisdiction=current,
-                              filed_by=analysis["filed_by"])
-    satisfied = obligations.try_satisfy(analysis["doc_type"],
-                                        filed_by=analysis["filed_by"])
-    role = party.get()
-    for fault in analysis["faults"]:
-        fault_side = party.side_of(fault["who"])
-        if role and fault_side and fault_side != role:
-            tail = ("This concerns the other side and may matter to your "
-                    "case — ask your attorney about it.")
-        else:
-            tail = "Ask your attorney what happened here."
-        questions.add(
-            f"This {analysis['doc_type']} says: \"{fault['quote']}\" "
-            f"({fault['category']}, regarding {fault['who']}). {tail}",
-            source=file.filename, context_quote=fault["quote"])
+    created = _safe(
+        "deadlines",
+        lambda: deadlines.apply(analysis["doc_type"], filed, src,
+                                jurisdiction=current,
+                                filed_by=analysis["filed_by"]),
+        [], issues)
+    satisfied = _safe(
+        "satisfy",
+        lambda: obligations.try_satisfy(analysis["doc_type"],
+                                        filed_by=analysis["filed_by"]),
+        [], issues)
+
+    def _faults_stage():
+        role = party.get()
+        for fault in analysis["faults"]:
+            fault_side = party.side_of(fault["who"])
+            if role and fault_side and fault_side != role:
+                tail = ("This concerns the other side and may matter to your "
+                        "case — ask your attorney about it.")
+            else:
+                tail = "Ask your attorney what happened here."
+            questions.add(
+                f"This {analysis['doc_type']} says: \"{fault['quote']}\" "
+                f"({fault['category']}, regarding {fault['who']}). {tail}",
+                source=src, context_quote=fault["quote"])
+    _safe("faults", _faults_stage, None, issues)
 
     return {"key_facts": facts, "chunks_added": len(chunks),
             "doc_type": analysis["doc_type"], "filed_date": filed,
@@ -144,7 +183,8 @@ async def upload(file: UploadFile = File(...)):
             "jurisdiction": current,
             "jurisdiction_detected": detected,
             "filed_by": analysis["filed_by"],
-            "origin": origin}
+            "origin": origin,
+            "issues": issues}
 
 
 @app.post("/api/ask")
