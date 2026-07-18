@@ -26,6 +26,26 @@ def strip_scaffold(text: str) -> str:
     return text.strip()
 
 
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL)
+_MD_ITALIC_STAR_RE = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
+_MD_ITALIC_UND_RE = re.compile(r"(?<![\w])_([^_\n]+)_(?![\w])")
+
+
+def strip_markdown(text: str) -> str:
+    """Flatten markdown into plain prose for non-technical readers. Applied to
+    user-facing prose only — never to JSON-bearing model output."""
+    text = re.sub(r"\\([_*#\[\]()~`>+\-.!])", r"\1", text)     # \_ -> _
+    text = _MD_BOLD_RE.sub(lambda m: m.group(1) or m.group(2), text)
+    text = _MD_ITALIC_STAR_RE.sub(r"\1", text)
+    text = _MD_ITALIC_UND_RE.sub(r"\1", text)
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)  # headings
+    text = re.sub(r"^\s*>\s?", "", text, flags=re.MULTILINE)    # blockquotes
+    text = re.sub(r"^(\s*)[*+\-•]\s+", r"\1• ", text, flags=re.MULTILINE)
+    text = re.sub(r"`([^`\n]*)`", r"\1", text)                  # inline code
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def embed(text: str) -> list[float]:
     d = _post("/api/embeddings", {"model": config.EMBED_MODEL, "prompt": text})
     return d["embedding"]

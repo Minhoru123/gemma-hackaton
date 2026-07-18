@@ -38,7 +38,9 @@ def _as_text(value) -> str:
 def key_facts(document_text: str) -> dict:
     raw = ollama_client.generate(_PROMPT.format(doc=document_text[:12000]))
     data = _extract_json(raw)
-    out = {f: _as_text(data.get(f, "Not stated")) or "Not stated" for f in _FIELDS}
+    clean = ollama_client.strip_markdown
+    out = {f: clean(_as_text(data.get(f, "Not stated"))) or "Not stated"
+           for f in _FIELDS}
     risks = data.get("risks", [])
-    out["risks"] = [str(r) for r in risks] if isinstance(risks, list) else []
+    out["risks"] = [clean(str(r)) for r in risks] if isinstance(risks, list) else []
     return out

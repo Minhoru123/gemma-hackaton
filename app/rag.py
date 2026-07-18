@@ -9,7 +9,9 @@ SYSTEM = (
     "Answer ONLY from the provided context. Summarizing, explaining, or giving an "
     "overview of the provided context IS answering from it — do that willingly. "
     "If the context does not contain the answer, "
-    "say you don't have that information. Never invent legal facts, deadlines, or outcomes."
+    "say you don't have that information. Never invent legal facts, deadlines, or outcomes. "
+    "Write in plain sentences and short paragraphs — no markdown formatting: "
+    "no asterisks, bold, bullet symbols, headings, or backslashes."
 )
 
 IDK = ("I don't have information about that in your documents. "
@@ -33,7 +35,7 @@ def answer(question: str, language: str = "English") -> dict:
     if not grounded:
         return {"answer": IDK, "sources": [], "grounded": False}
     prompt = _build_prompt(question, hits, language)
-    text = ollama_client.generate(prompt, system=SYSTEM)
+    text = ollama_client.strip_markdown(ollama_client.generate(prompt, system=SYSTEM))
     return {"answer": text, "sources": hits, "grounded": True}
 
 
@@ -57,5 +59,6 @@ def summarize_document(source: str, language: str = "English") -> dict:
         return {"summary": "", "found": False}
     prompt = _SUMMARY_PROMPT.format(language=language, name=source,
                                     text=text[:_SUMMARY_CHARS])
-    return {"summary": ollama_client.generate(prompt, system=SYSTEM),
-            "found": True}
+    summary = ollama_client.strip_markdown(
+        ollama_client.generate(prompt, system=SYSTEM))
+    return {"summary": summary, "found": True}
