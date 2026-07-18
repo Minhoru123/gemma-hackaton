@@ -42,7 +42,13 @@ _PROMPT = (
     "motion even if titled 'Notice'; a document containing the court's ruling "
     "is an order. Return ONLY a JSON object with keys:\n"
     "doc_type (one of: motion, opposition, reply, order, notice, letter, other),\n"
-    "filed_date (the date this document was filed/issued, as YYYY-MM-DD, or \"\"),\n"
+    "filed_date (as YYYY-MM-DD, or \"\": the date this document was signed, "
+    "executed, filed, or issued — the executing signature and its DATED line "
+    "are usually at the BOTTOM of the document; prefer that date, then a "
+    "file-stamp date),\n"
+    "filed_by (who filed or authored this document: \"plaintiff\" for the "
+    "plaintiff/petitioner side, \"defendant\" for the defendant/respondent "
+    "side, \"court\" for judge- or clerk-issued documents, or \"\"),\n"
     "events (array of {{date: YYYY-MM-DD, event: short description}} for every "
     "dated thing the document says happened or will happen),\n"
     "faults (array with one entry for EACH place the document attributes an "
@@ -83,8 +89,21 @@ def _valid_faults(data: dict) -> list[dict]:
     return out
 
 
+_HEAD_CHARS = 9000
+_TAIL_CHARS = 3000
+
+
+def _excerpt(text: str) -> str:
+    """Head + tail of a long document, so the model sees both the caption
+    (top) and the signature block / DATED line (bottom)."""
+    if len(text) <= _HEAD_CHARS + _TAIL_CHARS:
+        return text
+    return (text[:_HEAD_CHARS] + "\n[... middle of document omitted ...]\n"
+            + text[-_TAIL_CHARS:])
+
+
 def analyze(document_text: str) -> dict:
-    raw = ollama_client.generate(_PROMPT.format(doc=document_text[:12000]))
+    raw = ollama_client.generate(_PROMPT.format(doc=_excerpt(document_text)))
     data = _extract_json(raw)
 
     doc_type = str(data.get("doc_type", "")).strip().lower()
@@ -99,6 +118,11 @@ def analyze(document_text: str) -> dict:
             events.append({"date": _valid_date(ev["date"]),
                            "event": str(ev["event"])})
 
+    filed_by = str(data.get("filed_by", "")).strip().lower()
+    if filed_by not in ("plaintiff", "defendant", "court"):
+        filed_by = ""
+
     return {"doc_type": doc_type,
             "filed_date": _valid_date(data.get("filed_date")),
+            "filed_by": filed_by,
             "events": events, "faults": _valid_faults(data)}

@@ -1,5 +1,5 @@
 import config
-from app import store, ollama_client
+from app import store, ollama_client, party
 
 DISCLAIMER = "This is general information, not legal advice."
 
@@ -18,10 +18,17 @@ IDK = ("I don't have information about that in your documents. "
        "Please check with your lawyer or the court.")
 
 
+def _role_line() -> str:
+    role = party.get()
+    return (f"The user asking is the {party.LABELS[role]} in this case.\n\n"
+            if role else "")
+
+
 def _build_prompt(question: str, chunks: list[dict], language: str) -> str:
     ctx = "\n\n".join(f"[Source {i+1}: {c['source']}]\n{c['text']}"
                       for i, c in enumerate(chunks))
     return (
+        f"{_role_line()}"
         f"Context:\n{ctx}\n\n"
         f"Question: {question}\n\n"
         f"Answer in {language}, in plain language, citing sources like [Source 1] "
@@ -57,8 +64,8 @@ def summarize_document(source: str, language: str = "English") -> dict:
     text = store.get_source_text(source)
     if not text:
         return {"summary": "", "found": False}
-    prompt = _SUMMARY_PROMPT.format(language=language, name=source,
-                                    text=text[:_SUMMARY_CHARS])
+    prompt = _role_line() + _SUMMARY_PROMPT.format(language=language, name=source,
+                                                   text=text[:_SUMMARY_CHARS])
     summary = ollama_client.strip_markdown(
         ollama_client.generate(prompt, system=SYSTEM))
     return {"summary": summary, "found": True}

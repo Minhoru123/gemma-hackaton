@@ -72,6 +72,20 @@ def test_invalid_filed_date_falls_back_to_today_not_crash(tmp_path):
     assert created[0]["due_date"] > "2026-07-01"  # computed from today instead
 
 
+def test_users_own_filing_creates_no_obligation_for_user(tmp_path):
+    config.DB_PATH = str(tmp_path / "t.db")
+    obligations.init()
+    timeline.init()
+    # The user filed the motion — the opposition is the OTHER side's duty.
+    assert deadlines.apply("motion", "2026-07-01", "my_motion.pdf",
+                           jurisdiction="utah", origin="user") == []
+    assert obligations.list_open() == []
+    # Opponent's motion (or unknown origin) still fires.
+    created = deadlines.apply("motion", "2026-07-01", "their_motion.pdf",
+                              jurisdiction="utah", origin="opponent")
+    assert len(created) == 1
+
+
 def test_unknown_doc_type_triggers_nothing(tmp_path):
     config.DB_PATH = str(tmp_path / "t.db")
     obligations.init()
