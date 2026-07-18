@@ -71,6 +71,10 @@ const STR = {
     uploadFailed: "Something went wrong reading that file. Please try again.",
     askFailed: "Something went wrong answering that. Please try again.",
     langApi: "English",
+    caseLabel: "Case", newCase: "＋ New case",
+    newCasePrompt: "Name this case (e.g. \"Rivera divorce\"):",
+    removeDoc: "Remove", removeDocConfirm: (n) =>
+      `Remove "${n}" from this case? Its passages, timeline events and flagged questions will be deleted.`,
   },
   es: {
     badge: "Privado — nada sale de este equipo",
@@ -140,6 +144,10 @@ const STR = {
     uploadFailed: "Algo salió mal al leer ese archivo. Inténtelo de nuevo.",
     askFailed: "Algo salió mal al responder. Inténtelo de nuevo.",
     langApi: "Spanish",
+    caseLabel: "Caso", newCase: "＋ Nuevo caso",
+    newCasePrompt: "Nombre de este caso (p. ej. \"Divorcio Rivera\"):",
+    removeDoc: "Quitar", removeDocConfirm: (n) =>
+      `¿Quitar "${n}" de este caso? Se eliminarán sus pasajes, eventos de cronología y preguntas señaladas.`,
   },
 };
 
@@ -152,6 +160,7 @@ const state = {
   reveal: null,             // last upload analysis
   jurisdiction: "",         // 'utah' | 'federal' | '' (unknown)
   events: [], warnings: [], questions: [], docs: [],
+  cases: [], activeCase: null,
   resolvedLocal: new Set(), // question ids checked this session
   adviceResult: null,
   docMeta: JSON.parse(localStorage.getItem("cc_docmeta") || "{}"),
@@ -384,9 +393,23 @@ function renderDocs() {
             <div class="doc-name">${esc(d.source)}</div>
             <div class="doc-meta">${esc(line)}</div>
           </div>
+          <button class="doc-remove" data-src="${esc(d.source)}" title="${esc(t("removeDoc"))}">✕</button>
         </div>`;
       }).join("")
     : `<p class="list-empty">${esc(t("noDocs"))}</p>`;
+  $("#docs").querySelectorAll(".doc-remove").forEach((b) => {
+    b.onclick = () => removeDoc(b.dataset.src);
+  });
+}
+
+async function removeDoc(source) {
+  if (!confirm(t("removeDocConfirm")(source))) return;
+  await post("/api/documents/remove", { source });
+  // Clear the reveal card if it was for this doc, and drop local meta.
+  if (state.reveal && state.reveal.file === source) state.reveal = null;
+  delete state.docMeta[source];
+  localStorage.setItem("cc_docmeta", JSON.stringify(state.docMeta));
+  await refresh();
 }
 
 /* ---------- chat ---------- */
@@ -591,10 +614,57 @@ function renderCasebar() {
   $("#casebar-rules").textContent = j === "utah" ? t("rulesUtah") : t("rulesFed");
 }
 
+/* ---------- cases ---------- */
+
+function renderCases() {
+  $("#case-label").textContent = t("caseLabel");
+  $("#case-new").textContent = t("newCase");
+  const sel = $("#case-select");
+  sel.innerHTML = state.cases
+    .map((c) => `<option value="${c.id}"${c.id === state.activeCase ? " selected" : ""}>${esc(c.name)}</option>`)
+    .join("");
+}
+
+async function loadCases() {
+  const data = await api("/api/cases");
+  state.cases = data.cases;
+  state.activeCase = data.active_id;
+  renderCases();
+}
+
+// Switching a case resets all per-case UI, then reloads that case's data.
+async function switchCase(id) {
+  const data = await post("/api/cases/switch", { id });
+  state.cases = data.cases;
+  state.activeCase = data.active_id;
+  state.reveal = null;
+  state.msgs = [];
+  state.adviceResult = null;
+  state.resolvedLocal = new Set();
+  renderCases();
+  await refresh();
+}
+
+$("#case-select").onchange = (e) => switchCase(parseInt(e.target.value, 10));
+$("#case-new").onclick = async () => {
+  const name = prompt(t("newCasePrompt"));
+  if (name === null) return;               // cancelled
+  const data = await post("/api/cases", { name });
+  state.cases = data.cases;
+  state.activeCase = data.active_id;
+  state.reveal = null;
+  state.msgs = [];
+  state.adviceResult = null;
+  state.resolvedLocal = new Set();
+  renderCases();
+  await refresh();
+};
+
 function renderAll() {
   const empty = !state.events.length && !state.docs.length;
   $("#empty").classList.toggle("hidden", !empty);
   $("#app").classList.toggle("hidden", empty);
+  renderCases();
   renderCasebar();
   renderReveal();
   renderWarnings();
@@ -606,4 +676,4 @@ function renderAll() {
 }
 
 applyStatic();
-refresh();
+loadCases().then(refresh);

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import config
-from app import (store, timeline, ingest, extract, rag, ollama_client,
+from app import (cases, store, timeline, ingest, extract, rag, ollama_client,
                  authorities, questions, obligations, deadlines, case_events,
                  advice, jurisdiction)
 
@@ -20,6 +20,7 @@ UPLOAD_DIR = "uploads"
 @app.on_event("startup")
 def _startup():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+    cases.init()          # must run first: other stores scope by the active case
     store.init_db()
     timeline.init()
     authorities.init_db()
@@ -57,6 +58,18 @@ class AdviceBody(BaseModel):
 
 class QuestionBody(BaseModel):
     question: str
+
+
+class CaseCreateBody(BaseModel):
+    name: str = ""
+
+
+class CaseSwitchBody(BaseModel):
+    id: int
+
+
+class DocRemoveBody(BaseModel):
+    source: str
 
 
 class IdBody(BaseModel):
@@ -128,9 +141,40 @@ async def get_case():
     return {"jurisdiction": jurisdiction.get_case()}
 
 
+def _cases_state():
+    return {"cases": cases.list_all(), "active_id": cases.active_id()}
+
+
+@app.get("/api/cases")
+async def get_cases():
+    return _cases_state()
+
+
+@app.post("/api/cases")
+async def create_case(body: CaseCreateBody):
+    cases.create(body.name)
+    return _cases_state()
+
+
+@app.post("/api/cases/switch")
+async def switch_case(body: CaseSwitchBody):
+    cases.set_active(body.id)  # no-op if id doesn't exist
+    return _cases_state()
+
+
 @app.get("/api/documents")
 async def get_documents():
     return {"documents": store.list_sources()}
+
+
+@app.post("/api/documents/remove")
+async def remove_document(body: DocRemoveBody):
+    """Remove one uploaded document from the active case: its RAG chunks, its
+    timeline events, and any system-generated questions from it."""
+    removed = store.remove_source(body.source)
+    timeline.remove_by_source(body.source)
+    questions.remove_by_source(body.source)
+    return {"removed_chunks": removed, "documents": store.list_sources()}
 
 
 @app.get("/api/timeline")

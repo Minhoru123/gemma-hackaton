@@ -3,12 +3,19 @@ import json
 import os
 import numpy as np
 import config
-from app import ollama_client
+from app import ollama_client, cases
 
 
 def _conn():
     os.makedirs(os.path.dirname(config.DB_PATH), exist_ok=True)
     return sqlite3.connect(config.DB_PATH)
+
+
+def _ensure_case_id(c, table: str) -> None:
+    """Add a case_id column to an existing table if it's missing (idempotent)."""
+    cols = [r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()]
+    if "case_id" not in cols:
+        c.execute(f"ALTER TABLE {table} ADD COLUMN case_id INTEGER")
 
 
 def init_db() -> None:
@@ -19,6 +26,7 @@ def init_db() -> None:
             source TEXT, kind TEXT, text TEXT, embedding TEXT
         )"""
     )
+    _ensure_case_id(c, "chunks")
     c.execute(
         "CREATE TABLE IF NOT EXISTS case_meta (key TEXT PRIMARY KEY, value TEXT)"
     )
@@ -51,31 +59,55 @@ def set_meta(key: str, value: str) -> None:
 
 
 def add_chunks(source: str, chunks: list[str], kind: str) -> None:
+    # Uploads are scoped to the active case; shared reference data (corpus,
+    # authorities) is not tied to any case (case_id stays NULL).
+    case_id = cases.active_id() if kind == "upload" else None
     c = _conn()
     for ch in chunks:
         emb = ollama_client.embed(ch)
         c.execute(
-            "INSERT INTO chunks (source, kind, text, embedding) VALUES (?,?,?,?)",
-            (source, kind, ch, json.dumps(emb)),
+            "INSERT INTO chunks (source, kind, text, embedding, case_id) "
+            "VALUES (?,?,?,?,?)",
+            (source, kind, ch, json.dumps(emb), case_id),
         )
     c.commit()
     c.close()
 
 
 def list_sources() -> list[dict]:
-    """Uploaded documents (kind='upload') with their captured chunk counts."""
+    """Uploaded documents in the ACTIVE case, with their captured chunk counts."""
+    case_id = cases.active_id()
     c = _conn()
     rows = c.execute(
-        "SELECT source, COUNT(*) FROM chunks WHERE kind='upload' "
-        "GROUP BY source ORDER BY MIN(id)"
+        "SELECT source, COUNT(*) FROM chunks "
+        "WHERE kind='upload' AND case_id=? "
+        "GROUP BY source ORDER BY MIN(id)",
+        (case_id,),
     ).fetchall()
     c.close()
     return [{"source": s, "chunks": n} for s, n in rows]
 
 
-def clear_uploads() -> None:
+def remove_source(source: str) -> int:
+    """Delete all upload chunks for one document in the active case. Returns the
+    number of chunks removed. Corpus/authority chunks are never touched."""
+    case_id = cases.active_id()
     c = _conn()
-    c.execute("DELETE FROM chunks WHERE kind='upload'")
+    cur = c.execute(
+        "DELETE FROM chunks WHERE kind='upload' AND source=? AND case_id=?",
+        (source, case_id),
+    )
+    c.commit()
+    n = cur.rowcount
+    c.close()
+    return n
+
+
+def clear_uploads() -> None:
+    """Remove all upload chunks for the active case (reference data untouched)."""
+    case_id = cases.active_id()
+    c = _conn()
+    c.execute("DELETE FROM chunks WHERE kind='upload' AND case_id=?", (case_id,))
     c.commit()
     c.close()
 
@@ -83,8 +115,15 @@ def clear_uploads() -> None:
 def search(query: str, k: int = config.TOP_K) -> list[dict]:
     q = np.array(ollama_client.embed(query), dtype=np.float32)
     qn = q / (np.linalg.norm(q) + 1e-9)
+    case_id = cases.active_id()
     c = _conn()
-    rows = c.execute("SELECT source, kind, text, embedding FROM chunks").fetchall()
+    # Shared reference data (case_id IS NULL) is always visible; uploads only
+    # from the active case, so RAG never leaks one case's documents into another.
+    rows = c.execute(
+        "SELECT source, kind, text, embedding FROM chunks "
+        "WHERE case_id IS NULL OR case_id=?",
+        (case_id,),
+    ).fetchall()
     c.close()
     scored = []
     for source, kind, text, emb_json in rows:

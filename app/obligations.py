@@ -6,6 +6,7 @@ import sqlite3
 import os
 import datetime
 import config
+from app import cases
 
 DUE_SOON_DAYS = 7
 
@@ -13,6 +14,12 @@ DUE_SOON_DAYS = 7
 def _conn():
     os.makedirs(os.path.dirname(config.DB_PATH), exist_ok=True)
     return sqlite3.connect(config.DB_PATH)
+
+
+def _ensure_case_id(c) -> None:
+    cols = [r[1] for r in c.execute("PRAGMA table_info(obligations)").fetchall()]
+    if "case_id" not in cols:
+        c.execute("ALTER TABLE obligations ADD COLUMN case_id INTEGER")
 
 
 def init() -> None:
@@ -25,6 +32,7 @@ def init() -> None:
             satisfied_by TEXT, status TEXT DEFAULT 'open', created TEXT
         )"""
     )
+    _ensure_case_id(c)
     c.commit()
     c.close()
 
@@ -32,14 +40,15 @@ def init() -> None:
 def add(label: str, trigger_source: str = "", due_date: str = "",
         presumptive: bool = True, rule_cite: str = "",
         satisfied_by: str = "") -> int:
+    case_id = cases.active_id()
     c = _conn()
     cur = c.execute(
         """INSERT INTO obligations
            (label, trigger_source, due_date, presumptive, rule_cite,
-            satisfied_by, created)
-           VALUES (?,?,?,?,?,?,?)""",
+            satisfied_by, created, case_id)
+           VALUES (?,?,?,?,?,?,?,?)""",
         (label, trigger_source, due_date, int(presumptive), rule_cite,
-         satisfied_by, datetime.date.today().isoformat()),
+         satisfied_by, datetime.date.today().isoformat(), case_id),
     )
     c.commit()
     oid = cur.lastrowid
@@ -48,11 +57,13 @@ def add(label: str, trigger_source: str = "", due_date: str = "",
 
 
 def list_open() -> list[dict]:
+    case_id = cases.active_id()
     c = _conn()
     rows = c.execute(
         """SELECT id, label, trigger_source, due_date, presumptive, rule_cite,
                   satisfied_by, created
-           FROM obligations WHERE status='open' ORDER BY due_date"""
+           FROM obligations WHERE status='open' AND case_id=? ORDER BY due_date""",
+        (case_id,),
     ).fetchall()
     c.close()
     keys = ["id", "label", "trigger_source", "due_date", "presumptive",
@@ -68,14 +79,16 @@ def satisfy(oid: int) -> None:
 
 
 def try_satisfy(doc_type: str) -> list[str]:
-    """When a document of this type is uploaded, mark open obligations waiting
-    on that type as satisfied. Returns the labels satisfied."""
+    """When a document of this type is uploaded, mark open obligations in the
+    active case waiting on that type as satisfied. Returns the labels satisfied."""
     if not doc_type:
         return []
+    case_id = cases.active_id()
     c = _conn()
     rows = c.execute(
-        "SELECT id, label FROM obligations WHERE status='open' AND satisfied_by=?",
-        (doc_type,),
+        "SELECT id, label FROM obligations "
+        "WHERE status='open' AND satisfied_by=? AND case_id=?",
+        (doc_type, case_id),
     ).fetchall()
     for oid, _ in rows:
         c.execute("UPDATE obligations SET status='satisfied' WHERE id=?", (oid,))

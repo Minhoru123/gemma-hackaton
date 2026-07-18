@@ -33,6 +33,16 @@ header { background: #2E3A66; color: #FFF; padding: 13px 28px;
   background: transparent; color: rgba(255,255,255,0.8); }
 .langswitch button.active { background: #FFF; color: #2E3A66; }
 
+/* Case switcher (header) */
+.caseswitch { display: flex; align-items: center; gap: 8px; margin-right: 12px; }
+.case-label { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.75); }
+.case-select { background: rgba(255,255,255,0.10); color: #FFF; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.22); border-radius: 8px;
+  padding: 5px 10px; font-size: 12.5px; font-weight: 600; max-width: 200px; }
+.case-select option { color: #2E3A66; }
+.btn-case-new { padding: 5px 12px; font-size: 12.5px; white-space: nowrap;
+  border-color: rgba(255,255,255,0.35); color: #FFF; background: rgba(255,255,255,0.08); }
+
 /* Case strip */
 .casebar { background: #EDEAE1; border-bottom: 1px solid #E0DACB;
   padding: 8px 28px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -180,6 +190,11 @@ button { cursor: pointer; }
 .doc-name { font-family: ui-monospace, Menlo, monospace; font-size: 13px;
   font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-meta { font-size: 12.5px; color: #6E6A61; }
+.doc-remove { flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid #E0DACB; background: none; color: #9A948A; cursor: pointer;
+  font-size: 13px; line-height: 1; display: flex; align-items: center;
+  justify-content: center; }
+.doc-remove:hover { background: #FBEAEA; border-color: #E4B4B4; color: #B4342F; }
 
 /* Chat */
 .chatcard { display: flex; flex-direction: column; gap: 14px; }
