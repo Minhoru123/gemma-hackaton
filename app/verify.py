@@ -54,8 +54,10 @@ def verify_draft(text: str, coverage_text: str = "") -> dict:
     is False on any hard failure."""
     cites = authorities.diff_citations(text)
 
-    resolved_rows = [authorities.get_by_citation(c) for c in cites["known"]]
-    captures = [r["captured_text"] for r in resolved_rows if r and r["captured_text"]]
+    captures = [r["captured_text"]
+                for c in cites["known"]
+                for r in authorities.get_all_by_citation(c)
+                if r["captured_text"]]
     matched, unmatched = [], []
     for q in extract_quotes(text):
         (matched if any(quote_matches(q, cap) for cap in captures)

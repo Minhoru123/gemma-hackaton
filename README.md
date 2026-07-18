@@ -101,6 +101,24 @@ table (same SQLite database), with captured full text and provenance. Rows witho
         --court "U.S. Supreme Court" --year 1987 \
         --source-url https://... --retrieved 2026-07-18 --confirmed-by David
 
+**Bulk import from an existing reference library.** If you maintain a library
+elsewhere (an `AUTHORITIES.jsonl` index plus `_AI_TEXT/` captured full texts),
+import the whole thing:
+
+    python scripts/import_authorities.py "/path/to/_REFERENCE_LIBRARY"
+        # --fresh          start over (clears the authorities tables first)
+        # --embed-holdings also index each authority's holding for search /
+        #                  the second-opinion check (needs Ollama)
+        # --embed-rules    also index full statute/rule texts (slower)
+
+Provenance is preserved: library-provenance rows import as citable; web-captured
+rows keep their recorded confirmation or stay Tier 2. Compound citations
+("262 U.S. 390 (1923); 43 S.Ct. 625") get an alias per component so a draft
+citing either form resolves. A citation with several captures (statute
+versions, history packets) keeps them all: display uses the most complete
+text, and quote verification checks against every sibling. Re-running the
+import is safe — rows replace by (citation, name).
+
 **Draft verification.** Runs on every draft before filing; exits nonzero on any hard
 failure so it can gate a build:
 

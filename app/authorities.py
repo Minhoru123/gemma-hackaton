@@ -13,15 +13,35 @@ def _conn():
     return sqlite3.connect(config.DB_PATH)
 
 
+_CREATE_AUTHORITIES = """CREATE TABLE IF NOT EXISTS authorities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT, citation TEXT, canonical TEXT,
+    type TEXT, court TEXT, year TEXT,
+    holding TEXT, captured_text TEXT,
+    source_url TEXT, retrieved_date TEXT, confirmed_by TEXT
+)"""
+
+
 def init_db() -> None:
     c = _conn()
+    # A citation may legitimately have several captures (statute versions,
+    # history packets, parallel documents), so canonical is NOT unique.
+    # Migrate any legacy table that still carries the UNIQUE constraint.
+    row = c.execute("SELECT sql FROM sqlite_master WHERE type='table' "
+                    "AND name='authorities'").fetchone()
+    if row and "UNIQUE" in row[0]:
+        c.execute("ALTER TABLE authorities RENAME TO authorities_legacy")
+        c.execute(_CREATE_AUTHORITIES)
+        c.execute("INSERT INTO authorities SELECT * FROM authorities_legacy")
+        c.execute("DROP TABLE authorities_legacy")
+    c.execute(_CREATE_AUTHORITIES)
+    c.execute("CREATE INDEX IF NOT EXISTS idx_authorities_canonical "
+              "ON authorities (canonical)")
+    # Compound citations ("262 U.S. 390 (1923); 43 S.Ct. 625") get one row;
+    # each component citation becomes an alias resolving to that row.
     c.execute(
-        """CREATE TABLE IF NOT EXISTS authorities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT, citation TEXT, canonical TEXT UNIQUE,
-            type TEXT, court TEXT, year TEXT,
-            holding TEXT, captured_text TEXT,
-            source_url TEXT, retrieved_date TEXT, confirmed_by TEXT
+        """CREATE TABLE IF NOT EXISTS citation_aliases (
+            alias TEXT PRIMARY KEY, canonical TEXT
         )"""
     )
     c.commit()
@@ -41,34 +61,56 @@ def canonicalize(cite: str) -> str:
 def add_authority(name: str, citation: str, captured_text: str, type: str = "case",
                   court: str = "", year: str = "", holding: str = "",
                   source_url: str = "", retrieved_date: str = "",
-                  confirmed_by: str = "") -> None:
+                  confirmed_by: str = "", aliases: list[str] | None = None) -> None:
+    canonical = canonicalize(citation)
     c = _conn()
+    # Replace semantics per (citation, name): re-adding the same capture
+    # updates it; a different capture of the same citation adds a sibling row.
+    c.execute("DELETE FROM authorities WHERE canonical=? AND name=?",
+              (canonical, name))
     c.execute(
-        """INSERT OR REPLACE INTO authorities
+        """INSERT INTO authorities
            (name, citation, canonical, type, court, year, holding,
             captured_text, source_url, retrieved_date, confirmed_by)
            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-        (name, citation, canonicalize(citation), type, court, year, holding,
+        (name, citation, canonical, type, court, year, holding,
          captured_text, source_url, retrieved_date, confirmed_by),
     )
+    for alias in aliases or []:
+        alias_c = canonicalize(alias)
+        if alias_c != canonical:
+            c.execute(
+                "INSERT OR REPLACE INTO citation_aliases (alias, canonical) VALUES (?,?)",
+                (alias_c, canonical),
+            )
     c.commit()
     c.close()
 
 
-def get_by_citation(cite: str) -> dict | None:
+_ROW_KEYS = ["name", "citation", "type", "court", "year", "holding",
+             "captured_text", "source_url", "retrieved_date", "confirmed_by"]
+_ROW_SQL = ("SELECT name, citation, type, court, year, holding, captured_text, "
+            "source_url, retrieved_date, confirmed_by FROM authorities ")
+
+
+def get_all_by_citation(cite: str) -> list[dict]:
+    """Every capture of this citation (directly or via alias), most complete
+    text first."""
+    key = canonicalize(cite)
     c = _conn()
-    row = c.execute(
-        """SELECT name, citation, type, court, year, holding, captured_text,
-                  source_url, retrieved_date, confirmed_by
-           FROM authorities WHERE canonical = ?""",
-        (canonicalize(cite),),
-    ).fetchone()
+    rows = c.execute(
+        _ROW_SQL + "WHERE canonical = ? OR canonical = "
+        "(SELECT canonical FROM citation_aliases WHERE alias = ?) "
+        "ORDER BY LENGTH(captured_text) DESC",
+        (key, key),
+    ).fetchall()
     c.close()
-    if not row:
-        return None
-    keys = ["name", "citation", "type", "court", "year", "holding",
-            "captured_text", "source_url", "retrieved_date", "confirmed_by"]
-    return dict(zip(keys, row))
+    return [dict(zip(_ROW_KEYS, r)) for r in rows]
+
+
+def get_by_citation(cite: str) -> dict | None:
+    rows = get_all_by_citation(cite)
+    return rows[0] if rows else None
 
 
 def list_authorities() -> list[dict]:
@@ -113,10 +155,10 @@ def diff_citations(text: str) -> dict:
     unconfirmed (captured but awaiting sign-off), and unknown."""
     known, unconfirmed, unknown = [], [], []
     for cite in extract_citations(text):
-        row = get_by_citation(cite)
-        if row is None:
+        rows = get_all_by_citation(cite)
+        if not rows:
             unknown.append(cite)
-        elif not row["confirmed_by"]:
+        elif not any(r["confirmed_by"] for r in rows):
             unconfirmed.append(cite)
         else:
             known.append(cite)

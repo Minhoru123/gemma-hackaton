@@ -12,6 +12,15 @@ def extract_text(path: str) -> str:
         return f.read().strip()
 
 
+def strip_frontmatter(text: str) -> str:
+    """Remove a leading YAML frontmatter block (--- ... ---) if present."""
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            return text[end + 4:].lstrip("\n")
+    return text
+
+
 def chunk_text(text: str) -> list[str]:
     size, overlap = config.CHUNK_CHARS, config.CHUNK_OVERLAP
     text = " ".join(text.split())  # normalize whitespace
