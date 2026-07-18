@@ -9,6 +9,7 @@ CHUNK_CHARS = 900         # target chunk size in characters
 CHUNK_OVERLAP = 150
 
 DEADLINE_RULES = "deadline_rules.json"    # presumptive-deadline rules table
+DEADLINE_RULES_PROPOSED = "deadline_rules_proposed.json"  # staging, pre-approval
 INTAKE_DIR = "intake"                     # drop filings here for processing
 INTAKE_DONE_DIR = "intake/completed"      # processed files move here
 FETCH_LIST = "data/FETCH_LIST.md"         # citations we still need to capture

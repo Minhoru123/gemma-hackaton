@@ -4,6 +4,7 @@ __pycache__/
 venv/
 data/*.db
 data/FETCH_LIST.md
+deadline_rules_proposed.json
 intake/
 uploads/
 SYSTEM_DESCRIPTION.md

@@ -27,7 +27,7 @@ def apply(doc_type: str, filed_date: str, source_name: str) -> list[dict]:
             continue
         due = (datetime.date.fromisoformat(filed_date)
                + datetime.timedelta(days=rule["days"])).isoformat()
-        label = rule["obligation"].format(source=source_name)
+        label = rule["obligation"].replace("{source}", source_name)
         obligations.add(label, trigger_source=source_name, due_date=due,
                         presumptive=True, rule_cite=rule["rule_cite"],
                         satisfied_by=rule["satisfied_by"])

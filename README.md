@@ -35,7 +35,11 @@ anyone on the user's behalf.
 
 **Timeline.** Every upload is analyzed (document type, filed date, and all dated
 events it mentions) and placed on the case timeline, alongside extracted
-deadlines and presumptive deadlines.
+deadlines and presumptive deadlines. Documents are classified by what their
+text *does*, not by their title or filename: operative language (e.g. "moves
+this court for", "IT IS HEREBY ORDERED", "reply in support of") is checked
+deterministically and overrides the model — a document titled "Notice of
+Motion" that asks for relief is treated as a motion.
 
 **Presumptive deadlines.** `deadline_rules.json` maps filing types to what they
 trigger (e.g. a motion triggers an opposition in 14 days). Dates computed from
@@ -44,15 +48,30 @@ the count ignores service method, weekends, holidays, and local variations.
 The shipped rules are EXAMPLES — edit the file and verify each period for your
 court. Deadlines a human confirms directly are the authoritative ones.
 
+To build the rules table from your court's actual rules, upload them (e.g. the
+Utah Rules of Civil Procedure as PDF or text) to the extractor:
+
+    python scripts/extract_deadline_rules.py urcp.pdf   # -> deadline_rules_proposed.json
+    # review the proposed file: every rule carries the verbatim sentence it
+    # came from — check the day counts and cites, edit or delete entries
+    python scripts/extract_deadline_rules.py --approve  # merge into deadline_rules.json
+
+Extraction is proposal-first (nothing activates without your approval) and
+mechanically gated: any proposed rule whose quote does not verbatim-match the
+source text is dropped automatically.
+
 **Warnings & to-do.** Filings create open obligations (tracked in the database);
 the Warnings panel shows what is still open, sorted overdue → due soon → open.
 Uploading a document of the awaited type (e.g. an opposition) automatically
 satisfies the matching obligation; anything can also be marked done by hand.
 Warnings appear when the app is opened — nothing runs in the background.
 
-**Watchdog.** When an uploaded court order attributes a procedural failure to
-someone (untimely filing, waiver, missed response), the exact sentence is
-flagged and routed to the ask-your-attorney list. The system reports the
+**Watchdog.** Every uploaded document is scanned for language attributing an
+error or missed obligation to a party or lawyer, across categories: untimely
+filing, waived/forfeited arguments, missed hearings, discovery failures,
+sanctions, failure to prosecute, defaults, blown limitations periods, and
+unpreserved issues. Each hit is flagged with the exact sentence and routed to
+the ask-your-attorney list — one question per fault. The system reports the
 signal with the quote; it never issues a verdict about the lawyer.
 
 **Ask your attorney.** A running list of things worth raising with counsel:

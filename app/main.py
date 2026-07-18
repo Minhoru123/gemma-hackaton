@@ -86,19 +86,19 @@ async def upload(file: UploadFile = File(...)):
 
     created = deadlines.apply(analysis["doc_type"], filed, file.filename)
     satisfied = obligations.try_satisfy(analysis["doc_type"])
-    if analysis["fault"]["found"]:
+    for fault in analysis["faults"]:
         questions.add(
-            f"This {analysis['doc_type']} says: \"{analysis['fault']['quote']}\" "
-            f"({analysis['fault']['issue']}, regarding {analysis['fault']['who']}). "
+            f"This {analysis['doc_type']} says: \"{fault['quote']}\" "
+            f"({fault['category']}, regarding {fault['who']}). "
             "Ask your attorney what happened here.",
-            source=file.filename, context_quote=analysis["fault"]["quote"])
+            source=file.filename, context_quote=fault["quote"])
 
     return {"key_facts": facts, "chunks_added": len(chunks),
             "doc_type": analysis["doc_type"], "filed_date": filed,
             "events_added": len(analysis["events"]),
             "presumptive_deadlines": created,
             "obligations_satisfied": satisfied,
-            "fault_flagged": analysis["fault"]["found"]}
+            "faults_flagged": analysis["faults"]}
 
 
 @app.post("/api/ask")
