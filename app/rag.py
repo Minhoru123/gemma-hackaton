@@ -46,6 +46,37 @@ def answer(question: str, language: str = "English") -> dict:
     return {"answer": text, "sources": hits, "grounded": True}
 
 
+_SUGGEST_PROMPT = (
+    "You are helping the {side} in this case prepare: {obligation}. "
+    "The document being responded to is below. Suggest 4 to 6 argument ideas "
+    "for the responsive filing. For each idea: one sentence naming the "
+    "argument, then one sentence on what part of the document it answers, "
+    "quoting the relevant words. Use ONLY what appears in the document — do "
+    "not invent facts, cases, or rules. End by reminding the reader these are "
+    "ideas to discuss with their attorney, not legal advice. "
+    "Write plain prose, no markdown. Answer in {language}.\n\n"
+    "Document ({name}):\n\n{text}"
+)
+
+
+def suggest_arguments(obligation: dict, language: str = "English") -> dict:
+    """Grounded argument ideas for a responsive filing: read the document that
+    triggered the obligation and propose answers to it, from the perspective
+    of the side that owes the response."""
+    text = store.get_source_text(obligation["trigger_source"])
+    if not text:
+        return {"found": False, "suggestions": ""}
+    side = party.LABELS.get(obligation.get("owed_by", ""), "responding party")
+    prompt = _SUGGEST_PROMPT.format(
+        side=side, obligation=obligation["label"], language=language,
+        name=obligation["trigger_source"], text=text[:_SUMMARY_CHARS])
+    return {"found": True,
+            "suggestions": ollama_client.strip_markdown(
+                ollama_client.generate(prompt, system=SYSTEM)),
+            "for": obligation["label"],
+            "source": obligation["trigger_source"]}
+
+
 _SUMMARY_CHARS = 16000  # how much of a document the summary prompt sees
 
 _SUMMARY_PROMPT = (

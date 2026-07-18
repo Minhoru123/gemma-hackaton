@@ -87,6 +87,14 @@ const STR = {
     roleYou: (l) => `You: ${l}`,
     roleChangeTitle: "Click to change",
     uploadProgress: (i, n) => `Reading file ${i} of ${n}…`,
+    updateTl: "↻ Update timeline",
+    updateTlBusy: "Updating — re-reading your documents…",
+    updateTlTitle: "Re-read every document in this case and rebuild the timeline",
+    viewPl: "Plaintiff view", viewDef: "Defendant view",
+    viewTitle: "See deadlines from this side's perspective",
+    sidePl: "Plaintiff/Petitioner", sideDef: "Defendant/Respondent",
+    suggestBtn: "💡 Argument ideas",
+    suggestQ: (l) => `Argument ideas for: ${l}`,
   },
   es: {
     badge: "Privado — nada sale de este equipo",
@@ -172,6 +180,14 @@ const STR = {
     roleYou: (l) => `Usted: ${l}`,
     roleChangeTitle: "Haga clic para cambiar",
     uploadProgress: (i, n) => `Leyendo archivo ${i} de ${n}…`,
+    updateTl: "↻ Actualizar cronología",
+    updateTlBusy: "Actualizando — releyendo sus documentos…",
+    updateTlTitle: "Releer todos los documentos de este caso y reconstruir la cronología",
+    viewPl: "Vista del demandante", viewDef: "Vista del demandado",
+    viewTitle: "Ver los plazos desde la perspectiva de esta parte",
+    sidePl: "Demandante/Peticionario", sideDef: "Demandado/Requerido",
+    suggestBtn: "💡 Ideas de argumentos",
+    suggestQ: (l) => `Ideas de argumentos para: ${l}`,
   },
 };
 
@@ -184,6 +200,7 @@ const state = {
   reveal: null,             // last upload analysis
   jurisdiction: "",         // 'utah' | 'federal' | '' (unknown)
   role: "",                 // 'plaintiff' | 'defendant' | '' (not asked yet)
+  view: "",                 // current perspective; defaults to role
   events: [], warnings: [], questions: [], docs: [],
   cases: [], activeCase: null,
   resolvedLocal: new Set(), // question ids checked this session
@@ -237,6 +254,8 @@ function applyStatic() {
   $("#qaddbtn").textContent = t("addBtn");
   $("#advice").placeholder = t("soPlaceholder");
   $("#checkadvice").textContent = t("soBtn");
+  if (!$("#tl-update").disabled) $("#tl-update").textContent = t("updateTl");
+  $("#tl-update").title = t("updateTlTitle");
   $("#fillexample").textContent = t("soExample");
   $("#lang-en").classList.toggle("active", state.lang === "en");
   $("#lang-es").classList.toggle("active", state.lang === "es");
@@ -367,6 +386,12 @@ function warnDueText(w) {
   return text;
 }
 
+function sideTag(owedBy) {
+  if (!owedBy) return "";
+  const label = owedBy === "plaintiff" ? t("sidePl") : t("sideDef");
+  return `<span class="side-tag ${owedBy}">${esc(label)}</span>`;
+}
+
 function renderWarnings() {
   const sevLabel = { overdue: t("sevOverdue"), due_soon: t("sevSoon"), open: t("sevOpen") };
   $("#warn-count").textContent = state.warnings.length || "";
@@ -375,20 +400,55 @@ function renderWarnings() {
       <div class="warn ${w.urgency}">
         <div class="warn-tags">
           <span class="sev">${esc(sevLabel[w.urgency])}</span>
+          ${sideTag(w.owed_by)}
           ${w.presumptive ? `<span class="pres-tag">${esc(t("presTag"))}</span>` : ""}
         </div>
         <div class="warn-title">${esc(w.label)}</div>
         <div class="warn-due">${esc(warnDueText(w))}</div>
-        <div><button class="btn-small" data-id="${w.id}">${esc(t("markDone"))}</button></div>
+        <div class="warn-actions">
+          <button class="btn-small warn-suggest" data-id="${w.id}">${esc(t("suggestBtn"))}</button>
+          <button class="btn-small warn-done" data-id="${w.id}">${esc(t("markDone"))}</button>
+        </div>
       </div>`).join("")
     : `<p class="list-empty">${esc(t("noWarnings"))}</p>`;
-  $("#warnings").querySelectorAll("button").forEach((b) => {
+  $("#warnings").querySelectorAll(".warn-done").forEach((b) => {
     b.onclick = async () => {
-      const data = await post("/api/obligations/satisfy", { id: parseInt(b.dataset.id, 10) });
-      state.warnings = data.warnings;
-      renderWarnings();
+      await post("/api/obligations/satisfy", { id: parseInt(b.dataset.id, 10) });
+      await loadWarnings();
     };
   });
+  $("#warnings").querySelectorAll(".warn-suggest").forEach((b) => {
+    const w = state.warnings.find((x) => x.id === parseInt(b.dataset.id, 10));
+    b.onclick = () => suggestArgs(w);
+  });
+}
+
+async function suggestArgs(w) {
+  if (!w || state.asking) return;
+  state.msgs.push({ kind: "user", text: t("suggestQ")(w.label) });
+  state.asking = true;
+  state.elapsed = 0;
+  clearInterval(state.timer);
+  state.timer = setInterval(() => {
+    state.elapsed += 1;
+    $("#elapsed").textContent = `${state.elapsed}s`;
+  }, 1000);
+  renderChat();
+  try {
+    const data = await post("/api/suggest-arguments",
+      { id: w.id, language: t("langApi") });
+    if (data.found && data.suggestions) {
+      state.msgs.push({ kind: "answer", text: data.suggestions, cits: [] });
+    } else {
+      state.msgs.push({ kind: "error", text: t("askFailed") });
+    }
+  } catch (e) {
+    state.msgs.push({ kind: "error", text: t("askFailed") });
+  } finally {
+    clearInterval(state.timer);
+    state.asking = false;
+    renderChat();
+  }
 }
 
 /* ---------- timeline ---------- */
@@ -422,6 +482,23 @@ function renderTimeline() {
       </div>`).join("")
     : `<p class="list-empty">${esc(t("noEvents"))}</p>`;
 }
+
+$("#tl-update").onclick = async () => {
+  const b = $("#tl-update");
+  if (b.disabled) return;
+  b.disabled = true;
+  b.textContent = t("updateTlBusy");
+  try {
+    const data = await post("/api/timeline/rebuild", {});
+    state.events = data.events;
+    renderTimeline();
+  } catch (e) {
+    alert(t("askFailed"));
+  } finally {
+    b.disabled = false;
+    b.textContent = t("updateTl");
+  }
+};
 
 /* ---------- documents ---------- */
 
@@ -669,27 +746,45 @@ $("#checkadvice").onclick = async () => {
 
 /* ---------- data loading / top-level render ---------- */
 
+const warnUrl = () =>
+  "/api/warnings" + (state.view ? `?view=${state.view}` : "");
+
+async function loadWarnings() {
+  const d = await api(warnUrl());
+  state.warnings = d.warnings;
+  renderWarnings();
+}
+
 async function refresh() {
-  const [tl, warn, qs, docs, cs] = await Promise.all([
-    api("/api/timeline"), api("/api/warnings"), api("/api/questions"),
+  // Case identity first: the warnings request depends on the current view,
+  // which defaults to the user's declared side.
+  const cs = await api("/api/case").catch(() => ({ jurisdiction: "", role: "" }));
+  state.jurisdiction = cs.jurisdiction;
+  state.role = cs.role || "";
+  if (!state.view) state.view = state.role;
+  const [tl, warn, qs, docs] = await Promise.all([
+    api("/api/timeline"), api(warnUrl()), api("/api/questions"),
     api("/api/documents").catch(() => ({ documents: [] })),
-    api("/api/case").catch(() => ({ jurisdiction: "", role: "" })),
   ]);
   state.events = tl.events;
   state.warnings = warn.warnings;
   state.questions = qs.questions;
   state.docs = docs.documents;
-  state.jurisdiction = cs.jurisdiction;
-  state.role = cs.role || "";
   renderAll();
+}
+
+async function setView(view) {
+  state.view = view;
+  renderCasebar();
+  await loadWarnings();
 }
 
 function renderCasebar() {
   const j = state.jurisdiction;
   const role = state.role;
-  // Visible while the court is known OR the user hasn't said which side
-  // they're on — the role question is part of setting up the case.
-  $("#casebar").classList.toggle("hidden", !j && !!role);
+  // Always visible: it carries the court, the role question/chip, and the
+  // plaintiff/defendant view toggle.
+  $("#casebar").classList.remove("hidden");
   $("#casebar-court").textContent =
     j ? (j === "utah" ? t("courtUtah") : t("courtFed")) : "";
   $("#casebar-rules").textContent =
@@ -707,12 +802,27 @@ function renderCasebar() {
     $("#role-p").onclick = () => setRole("plaintiff");
     $("#role-d").onclick = () => setRole("defendant");
   }
+  const viewEl = $("#casebar-view");
+  if (role) {
+    const v = state.view || role;
+    viewEl.innerHTML = `
+      <button class="view-btn${v === "plaintiff" ? " active" : ""}" data-v="plaintiff">${esc(t("viewPl"))}</button>
+      <button class="view-btn${v === "defendant" ? " active" : ""}" data-v="defendant">${esc(t("viewDef"))}</button>`;
+    viewEl.querySelectorAll(".view-btn").forEach((b) => {
+      b.title = t("viewTitle");
+      b.onclick = () => setView(b.dataset.v);
+    });
+  } else {
+    viewEl.innerHTML = "";
+  }
 }
 
 async function setRole(role) {
   const data = await post("/api/case/role", { role });
   state.role = data.role;
+  state.view = data.role;   // your own side is the default view
   renderCasebar();
+  await loadWarnings();
 }
 
 /* ---------- cases ---------- */

@@ -30,11 +30,25 @@ def init() -> None:
     c.close()
 
 
-def add_event(kind: str, label: str, when: str, source: str = "") -> None:
+def _norm(label: str) -> str:
+    return " ".join((label or "").split()).lower()
+
+
+def add_event(kind: str, label: str, when: str, source: str = "") -> bool:
     """Record a timeline event. `source` is the uploaded document it came from
-    (if any), so removing that document can remove its events precisely."""
+    (if any), so removing that document can remove its events precisely.
+    An event identical to one already on this case's timeline (same kind, day,
+    and normalized label) is skipped — later documents often restate known
+    events. Returns True if the event was added."""
     case_id = cases.active_id()
     c = _conn()
+    existing = c.execute(
+        "SELECT label FROM timeline WHERE case_id=? AND kind=? AND when_ts=?",
+        (case_id, kind, when),
+    ).fetchall()
+    if any(_norm(row[0]) == _norm(label) for row in existing):
+        c.close()
+        return False
     c.execute(
         "INSERT INTO timeline (kind, label, when_ts, case_id, source) "
         "VALUES (?,?,?,?,?)",
@@ -42,6 +56,19 @@ def add_event(kind: str, label: str, when: str, source: str = "") -> None:
     )
     c.commit()
     c.close()
+    return True
+
+
+def clear_case() -> int:
+    """Remove every timeline event of the active case (for a rebuild).
+    Returns rows removed."""
+    case_id = cases.active_id()
+    c = _conn()
+    cur = c.execute("DELETE FROM timeline WHERE case_id=?", (case_id,))
+    c.commit()
+    n = cur.rowcount
+    c.close()
+    return n
 
 
 def list_events() -> list[dict]:

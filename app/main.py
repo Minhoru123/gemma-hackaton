@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import config
 from app import (cases, store, timeline, ingest, extract, rag, ollama_client,
                  authorities, questions, obligations, deadlines, case_events,
-                 advice, jurisdiction, dates, party)
+                 advice, jurisdiction, dates, party, rebuild)
 
 app = FastAPI(title="Case Companion")
 app.mount("/web", StaticFiles(directory="web"), name="web")
@@ -114,8 +114,10 @@ async def upload(file: UploadFile = File(...)):
 
     origin = party.origin(analysis["filed_by"])
     created = deadlines.apply(analysis["doc_type"], filed, file.filename,
-                              jurisdiction=current, origin=origin)
-    satisfied = obligations.try_satisfy(analysis["doc_type"])
+                              jurisdiction=current,
+                              filed_by=analysis["filed_by"])
+    satisfied = obligations.try_satisfy(analysis["doc_type"],
+                                        filed_by=analysis["filed_by"])
     role = party.get()
     for fault in analysis["faults"]:
         fault_side = party.side_of(fault["who"])
@@ -214,6 +216,14 @@ async def get_timeline():
     return {"events": timeline.list_events()}
 
 
+@app.post("/api/timeline/rebuild")
+async def rebuild_timeline():
+    """Re-derive the whole timeline from every stored document in the active
+    case (slow: re-runs analysis per document)."""
+    stats = rebuild.rebuild_timeline()
+    return {**stats, "events": timeline.list_events()}
+
+
 @app.post("/api/check-advice")
 async def check_advice(body: AdviceBody):
     return advice.check(body.text)
@@ -236,9 +246,26 @@ async def resolve_question(body: IdBody):
     return {"questions": questions.list_open()}
 
 
+class SuggestBody(BaseModel):
+    id: int
+    language: str = "English"
+
+
 @app.get("/api/warnings")
-async def get_warnings():
-    return {"warnings": obligations.warnings()}
+async def get_warnings(view: str = ""):
+    """Open obligations; with ?view=plaintiff|defendant, only that side's."""
+    if view not in ("plaintiff", "defendant"):
+        view = ""
+    return {"warnings": obligations.warnings(view=view), "view": view}
+
+
+@app.post("/api/suggest-arguments")
+async def suggest_arguments(body: SuggestBody):
+    """Grounded argument ideas for one open obligation's responsive filing."""
+    ob = obligations.get(body.id)
+    if not ob:
+        return {"found": False, "suggestions": ""}
+    return rag.suggest_arguments(ob, body.language)
 
 
 @app.post("/api/obligations/satisfy")

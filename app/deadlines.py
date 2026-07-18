@@ -18,6 +18,17 @@ from app import obligations, timeline, dates
 
 PRESUMPTIVE_NOTE = "PRESUMPTIVE — confirm with the court or your attorney"
 
+_RESPONDER = {"plaintiff": "defendant", "defendant": "plaintiff"}
+SIDE_POSSESSIVE = {"plaintiff": "Plaintiff/Petitioner's",
+                   "defendant": "Defendant/Respondent's"}
+
+
+def deadline_label(ob_label: str, owed_by: str, rule_cite: str) -> str:
+    """Timeline label for a presumptive deadline, naming whose deadline it is."""
+    side = SIDE_POSSESSIVE.get(owed_by, "")
+    prefix = f"{side} deadline: " if side else ""
+    return f"{prefix}{ob_label} ({PRESUMPTIVE_NOTE}; {rule_cite})"
+
 
 def load_rules() -> list[dict]:
     with open(config.DEADLINE_RULES, "r", encoding="utf-8") as f:
@@ -25,16 +36,15 @@ def load_rules() -> list[dict]:
 
 
 def apply(doc_type: str, filed_date: str, source_name: str,
-          jurisdiction: str = "", origin: str = "") -> list[dict]:
+          jurisdiction: str = "", filed_by: str = "") -> list[dict]:
     """Create presumptive obligations triggered by this filing. filed_date is
     ISO (YYYY-MM-DD); falls back to today if missing. Only rules matching the
-    case's jurisdiction fire (see module docstring). origin is who filed the
-    trigger relative to the user ('user' | 'opponent' | '' unknown): the user's
-    own filing creates the OTHER side's duty to respond, not the user's, so
-    origin='user' fires nothing. Unknown origin fires — a spurious to-do beats
-    a silently missed deadline. Returns created items."""
-    if origin == "user":
-        return []
+    case's jurisdiction fire (see module docstring). The duty to respond
+    belongs to the side OPPOSITE the filer (filed_by: 'plaintiff'/'defendant'),
+    recorded as owed_by so each view shows its own deadlines; unknown filer →
+    owed_by '' (shown in every view — a spurious to-do beats a silently
+    missed deadline). Returns created items."""
+    owed_by = _RESPONDER.get(filed_by, "")
     # Semantic guard: a malformed or impossible date must never reach the
     # calendar arithmetic below (timedelta handles month/year rollover).
     filed_date = dates.valid_iso(filed_date) or datetime.date.today().isoformat()
@@ -49,10 +59,11 @@ def apply(doc_type: str, filed_date: str, source_name: str,
         label = rule["obligation"].replace("{source}", source_name)
         obligations.add(label, trigger_source=source_name, due_date=due,
                         presumptive=True, rule_cite=rule["rule_cite"],
-                        satisfied_by=rule["satisfied_by"])
+                        satisfied_by=rule["satisfied_by"], owed_by=owed_by)
         timeline.add_event(
             "presumptive_deadline",
-            f"{label} ({PRESUMPTIVE_NOTE}; {rule['rule_cite']})", due)
+            deadline_label(label, owed_by, rule["rule_cite"]), due,
+            source=source_name)
         created.append({"label": label, "due_date": due,
-                        "rule_cite": rule["rule_cite"]})
+                        "rule_cite": rule["rule_cite"], "owed_by": owed_by})
     return created

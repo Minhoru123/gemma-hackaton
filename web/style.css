@@ -58,6 +58,16 @@ header { background: #2E3A66; color: #FFF; padding: 13px 28px;
 .role-chip { font-size: 12.5px; font-weight: 650; background: transparent;
   border: 1px solid #C9C2B2; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
 .role-chip:hover { background: #E4DFD2; }
+.casebar-view { display: flex; gap: 6px; margin-left: 16px; }
+.view-btn { font-size: 12px; background: transparent; border: 1px solid #C9C2B2;
+  border-radius: 999px; padding: 3px 10px; cursor: pointer; color: #6E6A61; }
+.view-btn.active { background: #2E2C28; color: #F5F2EA; border-color: #2E2C28;
+  font-weight: 650; }
+.side-tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; border-radius: 4px; padding: 2px 6px; }
+.side-tag.plaintiff { background: #E3EBF4; color: #2C4A6E; }
+.side-tag.defendant { background: #F0E4EC; color: #6E2C50; }
+.warn-actions { display: flex; gap: 8px; }
 
 /* Empty state */
 .empty { flex: 1; display: flex; align-items: flex-start; justify-content: center;
