@@ -1,4 +1,5 @@
 import os
+import re
 import datetime
 import shutil
 from fastapi import FastAPI, UploadFile, File
@@ -20,6 +21,24 @@ def _startup():
     store.init_db()
     timeline.init()
     ollama_client.warmup()
+
+
+_MONTHS = ("January|February|March|April|May|June|July|August|September|"
+           "October|November|December")
+_DATE_RE = re.compile(rf"((?:{_MONTHS})\s+\d{{1,2}},\s+\d{{4}})")
+
+
+def _find_date(*texts: str) -> str:
+    """Return the first 'Month D, YYYY' date found, as an ISO date for sorting,
+    or '' if none. Falls back gracefully if the date can't be parsed."""
+    for t in texts:
+        m = _DATE_RE.search(t or "")
+        if m:
+            try:
+                return datetime.datetime.strptime(m.group(1), "%B %d, %Y").date().isoformat()
+            except ValueError:
+                return ""
+    return ""
 
 
 class AskBody(BaseModel):
@@ -44,7 +63,10 @@ async def upload(file: UploadFile = File(...)):
     timeline.add_event("upload", f"Uploaded {file.filename}", now)
     facts = extract.key_facts(text)
     if facts.get("deadline") and facts["deadline"] != "Not stated":
-        timeline.add_event("case_date", f"Deadline: {facts['deadline']}", facts["deadline"])
+        # Sort by a real calendar date if we can find one (in the deadline text or the
+        # document); otherwise fall back to the upload time so it still appears in order.
+        when = _find_date(facts["deadline"], text) or now
+        timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when)
     return {"key_facts": facts, "chunks_added": len(chunks)}
 
 
