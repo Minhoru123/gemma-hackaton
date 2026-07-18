@@ -88,6 +88,28 @@ def list_sources() -> list[dict]:
     return [{"source": s, "chunks": n} for s, n in rows]
 
 
+def get_source_text(source: str) -> str:
+    """Reconstruct one uploaded document's full text (active case) from its
+    chunks, trimming the chunk overlap so text isn't duplicated at the seams."""
+    case_id = cases.active_id()
+    c = _conn()
+    rows = c.execute(
+        "SELECT text FROM chunks WHERE kind='upload' AND source=? AND case_id=? "
+        "ORDER BY id",
+        (source, case_id),
+    ).fetchall()
+    c.close()
+    texts = [r[0] for r in rows]
+    if not texts:
+        return ""
+    out = texts[0]
+    for t in texts[1:]:
+        if len(t) <= config.CHUNK_OVERLAP:
+            continue  # wholly contained in the previous chunk's overlap
+        out += t[config.CHUNK_OVERLAP:]
+    return out
+
+
 def remove_source(source: str) -> int:
     """Delete all upload chunks for one document in the active case. Returns the
     number of chunks removed. Corpus/authority chunks are never touched."""

@@ -77,6 +77,11 @@ class DocRemoveBody(BaseModel):
     source: str
 
 
+class DocSummarizeBody(BaseModel):
+    source: str
+    language: str = "English"
+
+
 class IdBody(BaseModel):
     id: int
 
@@ -178,6 +183,12 @@ async def rename_case(body: CaseRenameBody):
 @app.get("/api/documents")
 async def get_documents():
     return {"documents": store.list_sources()}
+
+
+@app.post("/api/documents/summarize")
+async def summarize_document(body: DocSummarizeBody):
+    """Whole-document plain-language explanation (bypasses chunk retrieval)."""
+    return rag.summarize_document(body.source, body.language)
 
 
 @app.post("/api/documents/remove")

@@ -86,7 +86,7 @@ def _valid_faults(data: dict) -> list[dict]:
 
 
 def analyze(document_text: str) -> dict:
-    raw = ollama_client.generate(_PROMPT.format(doc=document_text[:6000]))
+    raw = ollama_client.generate(_PROMPT.format(doc=document_text[:12000]))
     data = _extract_json(raw)
 
     doc_type = str(data.get("doc_type", "")).strip().lower()

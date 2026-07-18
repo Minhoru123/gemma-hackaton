@@ -3,8 +3,11 @@ GEN_MODEL = "gemma4:latest"
 EMBED_MODEL = "nomic-embed-text"
 DB_PATH = "data/case_companion.db"
 TOP_K = 4                 # retrieved chunks per query
-MIN_SCORE = 0.55          # below this, answer "I don't know". Tuned: relevant Qs score
-                          # 0.62-0.84, off-topic 0.36-0.46, so 0.55 sits in the gap.
+MIN_SCORE = 0.48          # below this, answer "I don't know". Re-tuned 2026-07-18 on
+                          # real case PDFs: legit questions (incl. meta-questions like
+                          # "what is this document about") score 0.51-0.68, off-topic
+                          # 0.37-0.44, so 0.48 sits in the gap. (The old 0.55 was tuned
+                          # on the 2-file corpus and refused legitimate meta-questions.)
 CHUNK_CHARS = 900         # target chunk size in characters
 CHUNK_OVERLAP = 150
 

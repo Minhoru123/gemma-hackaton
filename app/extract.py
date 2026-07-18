@@ -36,7 +36,7 @@ def _as_text(value) -> str:
 
 
 def key_facts(document_text: str) -> dict:
-    raw = ollama_client.generate(_PROMPT.format(doc=document_text[:4000]))
+    raw = ollama_client.generate(_PROMPT.format(doc=document_text[:12000]))
     data = _extract_json(raw)
     out = {f: _as_text(data.get(f, "Not stated")) or "Not stated" for f in _FIELDS}
     risks = data.get("risks", [])

@@ -6,7 +6,9 @@ DISCLAIMER = "This is general information, not legal advice."
 SYSTEM = (
     "You are Case Companion, a calm assistant that explains legal documents to people "
     "handling family-law or suing-the-state cases. Use plain, reassuring language. "
-    "Answer ONLY from the provided context. If the context does not contain the answer, "
+    "Answer ONLY from the provided context. Summarizing, explaining, or giving an "
+    "overview of the provided context IS answering from it — do that willingly. "
+    "If the context does not contain the answer, "
     "say you don't have that information. Never invent legal facts, deadlines, or outcomes."
 )
 
@@ -33,3 +35,27 @@ def answer(question: str, language: str = "English") -> dict:
     prompt = _build_prompt(question, hits, language)
     text = ollama_client.generate(prompt, system=SYSTEM)
     return {"answer": text, "sources": hits, "grounded": True}
+
+
+_SUMMARY_CHARS = 16000  # how much of a document the summary prompt sees
+
+_SUMMARY_PROMPT = (
+    "Explain this legal document in plain, calm language for the person it "
+    "affects. Cover: what kind of document it is, who filed it and what they "
+    "are asking for, the key dates or deadlines it mentions, and what it means "
+    "for the reader. Base every statement ONLY on the document text below; if "
+    "something is not stated, do not guess.\n\n"
+    "Answer in {language}.\n\nDocument: {name}\n\n{text}"
+)
+
+
+def summarize_document(source: str, language: str = "English") -> dict:
+    """Whole-document explanation — bypasses chunk retrieval entirely so
+    summaries reflect the document, not its 4 best-matching fragments."""
+    text = store.get_source_text(source)
+    if not text:
+        return {"summary": "", "found": False}
+    prompt = _SUMMARY_PROMPT.format(language=language, name=source,
+                                    text=text[:_SUMMARY_CHARS])
+    return {"summary": ollama_client.generate(prompt, system=SYSTEM),
+            "found": True}

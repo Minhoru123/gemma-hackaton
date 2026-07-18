@@ -77,6 +77,8 @@ const STR = {
     renameCasePrompt: "Rename this case:",
     removeDoc: "Remove", removeDocConfirm: (n) =>
       `Remove "${n}" from this case? Its passages, timeline events and flagged questions will be deleted.`,
+    explainDoc: "Explain", explainDocTitle: "Explain this document in plain language",
+    explainQ: (n) => `Explain ${n} to me`,
   },
   es: {
     badge: "Privado — nada sale de este equipo",
@@ -152,6 +154,8 @@ const STR = {
     renameCasePrompt: "Cambiar el nombre de este caso:",
     removeDoc: "Quitar", removeDocConfirm: (n) =>
       `¿Quitar "${n}" de este caso? Se eliminarán sus pasajes, eventos de cronología y preguntas señaladas.`,
+    explainDoc: "Explicar", explainDocTitle: "Explicar este documento en lenguaje sencillo",
+    explainQ: (n) => `Explícame ${n}`,
   },
 };
 
@@ -397,12 +401,16 @@ function renderDocs() {
             <div class="doc-name">${esc(d.source)}</div>
             <div class="doc-meta">${esc(line)}</div>
           </div>
+          <button class="btn-small doc-explain" data-src="${esc(d.source)}" title="${esc(t("explainDocTitle"))}">${esc(t("explainDoc"))}</button>
           <button class="doc-remove" data-src="${esc(d.source)}" title="${esc(t("removeDoc"))}">✕</button>
         </div>`;
       }).join("")
     : `<p class="list-empty">${esc(t("noDocs"))}</p>`;
   $("#docs").querySelectorAll(".doc-remove").forEach((b) => {
     b.onclick = () => removeDoc(b.dataset.src);
+  });
+  $("#docs").querySelectorAll(".doc-explain").forEach((b) => {
+    b.onclick = () => explainDoc(b.dataset.src);
   });
 }
 
@@ -500,6 +508,34 @@ async function ask(question) {
 }
 
 $("#askform").onsubmit = (e) => { e.preventDefault(); ask($("#q").value); };
+
+async function explainDoc(source) {
+  if (state.asking) return;
+  state.msgs.push({ kind: "user", text: t("explainQ")(source) });
+  state.asking = true;
+  state.elapsed = 0;
+  clearInterval(state.timer);
+  state.timer = setInterval(() => {
+    state.elapsed += 1;
+    $("#elapsed").textContent = `${state.elapsed}s`;
+  }, 1000);
+  renderChat();
+  try {
+    const data = await post("/api/documents/summarize",
+      { source, language: t("langApi") });
+    if (data.found && data.summary) {
+      state.msgs.push({ kind: "answer", text: data.summary, cits: [] });
+    } else {
+      state.msgs.push({ kind: "error", text: t("askFailed") });
+    }
+  } catch (e) {
+    state.msgs.push({ kind: "error", text: t("askFailed") });
+  } finally {
+    clearInterval(state.timer);
+    state.asking = false;
+    renderChat();
+  }
+}
 
 /* ---------- attorney questions ---------- */
 
