@@ -14,7 +14,7 @@ while the jurisdiction is unknown, preserving legacy generic-rules behavior."""
 import json
 import datetime
 import config
-from app import obligations, timeline
+from app import obligations, timeline, dates
 
 PRESUMPTIVE_NOTE = "PRESUMPTIVE — confirm with the court or your attorney"
 
@@ -29,7 +29,9 @@ def apply(doc_type: str, filed_date: str, source_name: str,
     """Create presumptive obligations triggered by this filing. filed_date is
     ISO (YYYY-MM-DD); falls back to today if missing. Only rules matching the
     case's jurisdiction fire (see module docstring). Returns created items."""
-    filed_date = filed_date or datetime.date.today().isoformat()
+    # Semantic guard: a malformed or impossible date must never reach the
+    # calendar arithmetic below (timedelta handles month/year rollover).
+    filed_date = dates.valid_iso(filed_date) or datetime.date.today().isoformat()
     created = []
     for rule in load_rules():
         if rule["trigger_doc_type"] != doc_type:

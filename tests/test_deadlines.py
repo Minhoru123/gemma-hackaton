@@ -52,6 +52,26 @@ def test_unknown_jurisdiction_fires_no_tagged_rules(tmp_path):
     assert obligations.list_open() == []
 
 
+def test_deadline_arithmetic_rolls_over_month_and_year(tmp_path):
+    config.DB_PATH = str(tmp_path / "t.db")
+    obligations.init()
+    timeline.init()
+    created = deadlines.apply("motion", "2026-12-24", "late_motion.pdf",
+                              jurisdiction="utah")
+    assert created[0]["due_date"] == "2027-01-07"  # 14 days across the year end
+
+
+def test_invalid_filed_date_falls_back_to_today_not_crash(tmp_path):
+    config.DB_PATH = str(tmp_path / "t.db")
+    obligations.init()
+    timeline.init()
+    # A semantically impossible date must not reach fromisoformat and crash.
+    created = deadlines.apply("motion", "2026-02-30", "bad_date.pdf",
+                              jurisdiction="utah")
+    assert len(created) == 1
+    assert created[0]["due_date"] > "2026-07-01"  # computed from today instead
+
+
 def test_unknown_doc_type_triggers_nothing(tmp_path):
     config.DB_PATH = str(tmp_path / "t.db")
     obligations.init()

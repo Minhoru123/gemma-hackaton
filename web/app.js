@@ -186,7 +186,12 @@ function fmtLong(iso) {
   return isNaN(d) ? iso
     : d.toLocaleDateString(locale(), { weekday: "short", month: "short", day: "numeric" });
 }
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Local calendar date — toISOString() is UTC and would flip "today" to
+// tomorrow every evening in US time zones.
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 async function api(path, opts) {
   const r = await fetch(path, opts);

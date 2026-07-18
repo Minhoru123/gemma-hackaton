@@ -5,7 +5,7 @@ errors to a party or lawyer. Fault flags are signals routed to the
 ask-your-attorney list, never verdicts."""
 
 import re
-from app import ollama_client
+from app import ollama_client, dates
 from app.extract import _extract_json
 
 DOC_TYPES = ["motion", "opposition", "reply", "order", "notice", "letter", "other"]
@@ -55,12 +55,10 @@ _PROMPT = (
     "label}}. Empty array if none).\n\nDocument:\n\n{doc}"
 )
 
-_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
 def _valid_date(s: str) -> str:
-    s = str(s or "").strip()
-    return s if _ISO_RE.match(s) else ""
+    # Semantic validation: "2026-02-30" and month 13 are rejected, not just
+    # malformed strings — a bad model date must never reach date arithmetic.
+    return dates.valid_iso(s)
 
 
 def classify_by_content(text: str) -> str:
