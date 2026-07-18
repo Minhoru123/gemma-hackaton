@@ -106,6 +106,11 @@ async def ask(body: AskBody):
     return rag.answer(body.question, body.language)
 
 
+@app.get("/api/documents")
+async def get_documents():
+    return {"documents": store.list_sources()}
+
+
 @app.get("/api/timeline")
 async def get_timeline():
     return {"events": timeline.list_events()}

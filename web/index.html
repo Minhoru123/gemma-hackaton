@@ -7,45 +7,142 @@
   <link rel="stylesheet" href="/web/style.css" />
 </head>
 <body>
-  <header>
-    <h1>Case Companion</h1>
-    <div class="controls">
-      <select id="lang"><option>English</option><option>Spanish</option></select>
-      <span id="net" class="net">checking…</span>
-    </div>
-  </header>
-
-  <main>
-    <section class="col">
-      <div id="drop" class="drop">Drop a PDF or text file, or click to choose</div>
-      <input id="file" type="file" accept=".pdf,.txt,.md" hidden />
-      <div id="warnings" class="card"></div>
-      <div id="facts" class="card hidden"></div>
-      <div id="timeline" class="card"></div>
-    </section>
-
-    <section class="col chatcol">
-      <div id="chat" class="chat"></div>
-      <form id="askform">
-        <input id="q" placeholder="Ask a question about your case…" autocomplete="off" />
-        <button>Ask</button>
-      </form>
-      <div id="questions" class="card"></div>
-      <div class="card">
-        <h3>Second opinion</h3>
-        <p class="hint">Paste advice from your lawyer. Each claim is checked
-          against the captured text of your documents, rights corpus, and
-          authorities — it reports matches and mismatches with the text, not
-          whether the advice is legally correct.</p>
-        <textarea id="advice" rows="4"
-          placeholder="Paste the advice here…"></textarea>
-        <button id="checkadvice">Check against captured text</button>
-        <div id="adviceresult"></div>
+  <div class="page">
+    <header>
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div class="brand-name">Case Companion</div>
       </div>
-    </section>
-  </main>
+      <div class="badge"><span class="badge-dot"></span><span id="badge-text"></span></div>
+      <div class="spacer"></div>
+      <div class="langswitch">
+        <button id="lang-en">English</button>
+        <button id="lang-es">Español</button>
+      </div>
+    </header>
 
-  <footer>This is general information, not legal advice.</footer>
+    <input id="file" type="file" accept=".pdf,.txt,.md" hidden />
+
+    <!-- Empty state -->
+    <div id="empty" class="empty hidden">
+      <div class="empty-inner">
+        <div class="empty-head">
+          <h1 id="empty-head"></h1>
+          <p id="empty-sub"></p>
+        </div>
+        <div id="drop-big" class="drop-big">
+          <div class="drop-idle">
+            <div class="drop-icon">↑</div>
+            <div class="drop-title" data-t="dropTitle"></div>
+            <div class="drop-hint">PDF · TXT · MD</div>
+          </div>
+          <div class="drop-busy hidden">
+            <div class="spinner"></div>
+            <div class="drop-busy-label" data-t="uploadingLabel"></div>
+          </div>
+        </div>
+        <div class="benefits">
+          <div class="benefit"><div class="benefit-n">1</div><div class="benefit-t" id="b1t"></div><div class="benefit-d" id="b1d"></div></div>
+          <div class="benefit"><div class="benefit-n">2</div><div class="benefit-t" id="b2t"></div><div class="benefit-d" id="b2d"></div></div>
+          <div class="benefit"><div class="benefit-n">3</div><div class="benefit-t" id="b3t"></div><div class="benefit-d" id="b3d"></div></div>
+        </div>
+        <p class="empty-privacy" data-t="privacySub"></p>
+      </div>
+    </div>
+
+    <!-- Populated state -->
+    <main id="app" class="hidden">
+      <div class="col">
+        <div id="reveal" class="hidden"></div>
+
+        <div id="drop-small" class="drop-small">
+          <div class="drop-idle">
+            <div class="drop-icon small">↑</div>
+            <div class="drop-small-label" data-t="dropTitle"></div>
+          </div>
+          <div class="drop-busy hidden">
+            <div class="spinner small"></div>
+            <div class="drop-busy-label" data-t="uploadingLabel"></div>
+          </div>
+        </div>
+
+        <section>
+          <div class="sec-head">
+            <h2 data-t="warnTitle"></h2>
+            <span id="warn-count" class="warn-count"></span>
+          </div>
+          <div id="warnings"></div>
+        </section>
+
+        <section>
+          <div class="sec-head"><h2 data-t="tlTitle"></h2></div>
+          <div id="timeline"></div>
+        </section>
+
+        <section>
+          <div class="sec-head"><h2 data-t="docsTitle"></h2></div>
+          <div id="docs" class="docs"></div>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="chatcard">
+          <div class="sec-head stacked">
+            <h2 data-t="chatTitle"></h2>
+            <div class="sec-sub" data-t="chatSub"></div>
+          </div>
+          <div id="chatlog" class="chatlog"></div>
+          <div id="thinking" class="thinking hidden">
+            <div class="thinking-row">
+              <span class="pulse"></span>
+              <span class="thinking-1" data-t="thinking1"></span>
+              <span id="elapsed" class="elapsed"></span>
+            </div>
+            <div class="thinking-2" data-t="thinking2"></div>
+          </div>
+          <div id="chips" class="chips"></div>
+          <form id="askform" class="inputrow">
+            <input id="q" autocomplete="off" />
+            <button id="askbtn" class="btn-primary" type="submit"></button>
+          </form>
+        </section>
+
+        <section>
+          <div class="sec-head stacked">
+            <h2 data-t="aqTitle"></h2>
+            <div class="sec-sub" data-t="aqSub"></div>
+          </div>
+          <div id="questions" class="qlist"></div>
+          <form id="qform" class="inputrow">
+            <input id="qnew" autocomplete="off" />
+            <button id="qaddbtn" class="btn-ghost" type="submit"></button>
+          </form>
+        </section>
+
+        <section>
+          <div class="sec-head stacked">
+            <h2 data-t="soTitle"></h2>
+            <div class="sec-sub" data-t="soSub"></div>
+          </div>
+          <textarea id="advice" rows="3"></textarea>
+          <div class="advice-actions">
+            <button id="checkadvice" class="btn-primary"></button>
+            <button id="fillexample" class="btn-link"></button>
+          </div>
+          <div id="checking" class="thinking-row hidden">
+            <span class="pulse"></span>
+            <span class="thinking-1" data-t="soChecking"></span>
+          </div>
+          <div id="adviceresult" class="hidden"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <div class="foot-1" data-t="disclaimer"></div>
+      <div class="foot-2" data-t="privacySub"></div>
+    </footer>
+  </div>
   <script src="/web/app.js"></script>
 </body>
 </html>

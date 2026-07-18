@@ -35,6 +35,17 @@ def add_chunks(source: str, chunks: list[str], kind: str) -> None:
     c.close()
 
 
+def list_sources() -> list[dict]:
+    """Uploaded documents (kind='upload') with their captured chunk counts."""
+    c = _conn()
+    rows = c.execute(
+        "SELECT source, COUNT(*) FROM chunks WHERE kind='upload' "
+        "GROUP BY source ORDER BY MIN(id)"
+    ).fetchall()
+    c.close()
+    return [{"source": s, "chunks": n} for s, n in rows]
+
+
 def clear_uploads() -> None:
     c = _conn()
     c.execute("DELETE FROM chunks WHERE kind='upload'")
