@@ -68,6 +68,11 @@ class CaseSwitchBody(BaseModel):
     id: int
 
 
+class CaseRenameBody(BaseModel):
+    id: int
+    name: str
+
+
 class DocRemoveBody(BaseModel):
     source: str
 
@@ -89,13 +94,15 @@ async def upload(file: UploadFile = File(...)):
 
     analysis = case_events.analyze(text)
     filed = analysis["filed_date"] or _find_date(text) or now[:10]
+    src = file.filename
     timeline.add_event(
-        "filed", f"Filed: {file.filename} ({analysis['doc_type']})", filed)
+        "filed", f"Filed: {src} ({analysis['doc_type']})", filed, source=src)
     for ev in analysis["events"]:
-        timeline.add_event("case_event", ev["event"], ev["date"])
+        timeline.add_event("case_event", ev["event"], ev["date"], source=src)
     if facts.get("deadline") and facts["deadline"] != "Not stated":
         when = _find_date(facts["deadline"], text) or now
-        timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when)
+        timeline.add_event("case_date", f"Deadline: {facts['deadline']}", when,
+                           source=src)
 
     detected = jurisdiction.detect(text)
     current = jurisdiction.get_case()
@@ -159,6 +166,12 @@ async def create_case(body: CaseCreateBody):
 @app.post("/api/cases/switch")
 async def switch_case(body: CaseSwitchBody):
     cases.set_active(body.id)  # no-op if id doesn't exist
+    return _cases_state()
+
+
+@app.post("/api/cases/rename")
+async def rename_case(body: CaseRenameBody):
+    cases.rename(body.id, body.name)  # no-op on blank name / unknown id
     return _cases_state()
 
 

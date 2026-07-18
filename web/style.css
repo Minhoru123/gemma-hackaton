@@ -33,15 +33,20 @@ header { background: #2E3A66; color: #FFF; padding: 13px 28px;
   background: transparent; color: rgba(255,255,255,0.8); }
 .langswitch button.active { background: #FFF; color: #2E3A66; }
 
-/* Case switcher (header) */
+/* Case switcher (header) — matches the badge/langswitch pill treatment */
 .caseswitch { display: flex; align-items: center; gap: 8px; margin-right: 12px; }
 .case-label { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.75); }
 .case-select { background: rgba(255,255,255,0.10); color: #FFF; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.22); border-radius: 8px;
   padding: 5px 10px; font-size: 12.5px; font-weight: 600; max-width: 200px; }
 .case-select option { color: #2E3A66; }
-.btn-case-new { padding: 5px 12px; font-size: 12.5px; white-space: nowrap;
-  border-color: rgba(255,255,255,0.35); color: #FFF; background: rgba(255,255,255,0.08); }
+/* New-case button: identical font, weight and color to the language buttons,
+   so it reads as part of the same header control set. */
+.btn-case-new { cursor: pointer; border-radius: 8px; white-space: nowrap;
+  padding: 6px 13px; font-size: 12.5px; font-weight: 600; color: #FFF;
+  background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.22); }
+.btn-case-new:hover { background: #FFF; color: #2E3A66; border-color: #FFF; }
+.btn-case-icon { padding: 6px 9px; }
 
 /* Case strip */
 .casebar { background: #EDEAE1; border-bottom: 1px solid #E0DACB;

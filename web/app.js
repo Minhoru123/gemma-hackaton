@@ -73,6 +73,8 @@ const STR = {
     langApi: "English",
     caseLabel: "Case", newCase: "＋ New case",
     newCasePrompt: "Name this case (e.g. \"Rivera divorce\"):",
+    renameCase: "✎", renameCaseTitle: "Rename this case",
+    renameCasePrompt: "Rename this case:",
     removeDoc: "Remove", removeDocConfirm: (n) =>
       `Remove "${n}" from this case? Its passages, timeline events and flagged questions will be deleted.`,
   },
@@ -146,6 +148,8 @@ const STR = {
     langApi: "Spanish",
     caseLabel: "Caso", newCase: "＋ Nuevo caso",
     newCasePrompt: "Nombre de este caso (p. ej. \"Divorcio Rivera\"):",
+    renameCase: "✎", renameCaseTitle: "Cambiar el nombre de este caso",
+    renameCasePrompt: "Cambiar el nombre de este caso:",
     removeDoc: "Quitar", removeDocConfirm: (n) =>
       `¿Quitar "${n}" de este caso? Se eliminarán sus pasajes, eventos de cronología y preguntas señaladas.`,
   },
@@ -619,10 +623,17 @@ function renderCasebar() {
 function renderCases() {
   $("#case-label").textContent = t("caseLabel");
   $("#case-new").textContent = t("newCase");
+  $("#case-rename").textContent = t("renameCase");
+  $("#case-rename").title = t("renameCaseTitle");
   const sel = $("#case-select");
   sel.innerHTML = state.cases
     .map((c) => `<option value="${c.id}"${c.id === state.activeCase ? " selected" : ""}>${esc(c.name)}</option>`)
     .join("");
+}
+
+function activeCaseName() {
+  const c = state.cases.find((x) => x.id === state.activeCase);
+  return c ? c.name : "";
 }
 
 async function loadCases() {
@@ -646,6 +657,14 @@ async function switchCase(id) {
 }
 
 $("#case-select").onchange = (e) => switchCase(parseInt(e.target.value, 10));
+$("#case-rename").onclick = async () => {
+  const name = prompt(t("renameCasePrompt"), activeCaseName());
+  if (name === null) return;               // cancelled
+  const data = await post("/api/cases/rename", { id: state.activeCase, name });
+  state.cases = data.cases;
+  state.activeCase = data.active_id;
+  renderCases();
+};
 $("#case-new").onclick = async () => {
   const name = prompt(t("newCasePrompt"));
   if (name === null) return;               // cancelled

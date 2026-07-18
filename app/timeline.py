@@ -9,10 +9,12 @@ def _conn():
     return sqlite3.connect(config.DB_PATH)
 
 
-def _ensure_case_id(c) -> None:
+def _ensure_columns(c) -> None:
     cols = [r[1] for r in c.execute("PRAGMA table_info(timeline)").fetchall()]
     if "case_id" not in cols:
         c.execute("ALTER TABLE timeline ADD COLUMN case_id INTEGER")
+    if "source" not in cols:
+        c.execute("ALTER TABLE timeline ADD COLUMN source TEXT")
 
 
 def init() -> None:
@@ -23,17 +25,20 @@ def init() -> None:
             kind TEXT, label TEXT, when_ts TEXT
         )"""
     )
-    _ensure_case_id(c)
+    _ensure_columns(c)
     c.commit()
     c.close()
 
 
-def add_event(kind: str, label: str, when: str) -> None:
+def add_event(kind: str, label: str, when: str, source: str = "") -> None:
+    """Record a timeline event. `source` is the uploaded document it came from
+    (if any), so removing that document can remove its events precisely."""
     case_id = cases.active_id()
     c = _conn()
     c.execute(
-        "INSERT INTO timeline (kind, label, when_ts, case_id) VALUES (?,?,?,?)",
-        (kind, label, when, case_id),
+        "INSERT INTO timeline (kind, label, when_ts, case_id, source) "
+        "VALUES (?,?,?,?,?)",
+        (kind, label, when, case_id, source),
     )
     c.commit()
     c.close()
@@ -51,14 +56,14 @@ def list_events() -> list[dict]:
 
 
 def remove_by_source(source: str) -> int:
-    """Remove timeline events tied to one uploaded document in the active case.
-    Events reference the document by filename in their label (e.g.
-    'Filed: notice.txt (notice)', 'Uploaded notice.txt'). Returns rows removed."""
+    """Remove all timeline events tied to one uploaded document in the active
+    case. Matches on the recorded `source` column, falling back to a label match
+    for any legacy rows written before the column existed. Returns rows removed."""
     case_id = cases.active_id()
     c = _conn()
     cur = c.execute(
-        "DELETE FROM timeline WHERE case_id=? AND label LIKE ?",
-        (case_id, f"%{source}%"),
+        "DELETE FROM timeline WHERE case_id=? AND (source=? OR label LIKE ?)",
+        (case_id, source, f"%{source}%"),
     )
     c.commit()
     n = cur.rowcount

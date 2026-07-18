@@ -83,6 +83,18 @@ def create(name: str) -> int:
     return new_id
 
 
+def rename(case_id: int, name: str) -> None:
+    """Rename a case. Blank name is ignored (keeps the current name). Renaming a
+    non-existent id is a no-op."""
+    name = (name or "").strip()
+    if not name:
+        return
+    c = _conn()
+    c.execute("UPDATE cases SET name=? WHERE id=?", (name, case_id))
+    c.commit()
+    c.close()
+
+
 def set_active(case_id: int) -> None:
     """Make exactly one case active. Switching to a non-existent id is a no-op
     (leaves current state unchanged) rather than clearing all active flags."""
