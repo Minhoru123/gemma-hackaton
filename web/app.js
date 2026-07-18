@@ -69,6 +69,8 @@ const STR = {
     wasPresDue: "Was presumptively due",
     inDays: (n) => n === 0 ? "today" : n === 1 ? "in 1 day" : `in ${n} days`,
     uploadFailed: "Something went wrong reading that file. Please try again.",
+    uploadFailedSome: (names) =>
+      `These files could not be read: ${names}. Everything else was added — no need to reload.`,
     askFailed: "Something went wrong answering that. Please try again.",
     langApi: "English",
     caseLabel: "Case", newCase: "＋ New case",
@@ -162,6 +164,8 @@ const STR = {
     wasPresDue: "Fecha presunta vencida",
     inDays: (n) => n === 0 ? "hoy" : n === 1 ? "en 1 día" : `en ${n} días`,
     uploadFailed: "Algo salió mal al leer ese archivo. Inténtelo de nuevo.",
+    uploadFailedSome: (names) =>
+      `No se pudieron leer estos archivos: ${names}. Todo lo demás fue agregado — no hace falta recargar la página.`,
     askFailed: "Algo salió mal al responder. Inténtelo de nuevo.",
     langApi: "Spanish",
     caseLabel: "Caso", newCase: "＋ Nuevo caso",
@@ -290,28 +294,31 @@ async function uploadFiles(files) {
   const list = Array.from(files || []).filter(Boolean);
   if (!list.length || state.uploading) return;
   setUploading(true);
-  try {
-    // Sequential on purpose: each upload runs local model analysis; the
-    // timeline orders documents by their own signed/filed dates regardless
-    // of upload order.
-    for (let i = 0; i < list.length; i++) {
-      setBusyLabel(list.length > 1
-        ? t("uploadProgress")(i + 1, list.length) : t("uploadingLabel"));
+  const failed = [];
+  // Sequential on purpose: each upload runs local model analysis; the
+  // timeline orders documents by their own signed/filed dates regardless
+  // of upload order. One file failing must not stop the rest.
+  for (let i = 0; i < list.length; i++) {
+    setBusyLabel(list.length > 1
+      ? t("uploadProgress")(i + 1, list.length) : t("uploadingLabel"));
+    try {
       const fd = new FormData();
       fd.append("file", list[i]);
       const data = await api("/api/upload", { method: "POST", body: fd });
       state.reveal = { file: list[i].name, ...data };
       state.docMeta[list[i].name] = { type: data.doc_type, filed: data.filed_date };
+    } catch (e) {
+      failed.push(list[i].name);
     }
-    localStorage.setItem("cc_docmeta", JSON.stringify(state.docMeta));
-    await refresh();
-  } catch (e) {
-    alert(t("uploadFailed"));
-  } finally {
-    setUploading(false);
-    setBusyLabel(t("uploadingLabel"));
-    renderAll();
   }
+  localStorage.setItem("cc_docmeta", JSON.stringify(state.docMeta));
+  // Refresh regardless of errors: whatever DID land server-side (documents,
+  // timeline events, deadlines) must show without a manual page reload.
+  try { await refresh(); } catch (e) { /* keep whatever state we have */ }
+  setUploading(false);
+  setBusyLabel(t("uploadingLabel"));
+  renderAll();
+  if (failed.length) alert(t("uploadFailedSome")(failed.join(", ")));
 }
 
 function wireDrop(zone) {
